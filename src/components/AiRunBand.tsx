@@ -1,4 +1,9 @@
-import { getNarrationLines, type NarrationState } from '../ai/run-narration'
+import { useEffect, useRef } from 'react'
+import {
+  getNarrationLines,
+  toPlainNarrationText,
+  type NarrationState,
+} from '../ai/run-narration'
 import { reconcilePlan, type PlannedScreen, type RunPlanEntry } from '../ai/run-plan'
 import { Button } from './ui/button'
 
@@ -20,22 +25,32 @@ export type AiRunBandProps = {
   onRetry: () => void
 }
 
-const ScreenRail = ({ entries }: { entries: RunPlanEntry[] }) => (
-  <div className="ai-run-band__rail">
-    <b>SCREENS</b>
-    <div className="ai-run-band__rail-list">
-      {entries.map((entry, index) => (
-        <div
-          className={`ai-run-band__screen ai-run-band__screen--${entry.status}`}
-          key={`${entry.name}-${index}`}
-        >
-          <i />
-          <span className="ai-run-band__screen-name">{entry.name}</span>
-        </div>
-      ))}
+const ScreenRail = ({ entries }: { entries: RunPlanEntry[] }) => {
+  const currentIndex = entries.findIndex((entry) => entry.status === 'building')
+  const currentRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    currentRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [currentIndex])
+
+  return (
+    <div className="ai-run-band__rail">
+      <b>SCREENS</b>
+      <div className="ai-run-band__rail-list">
+        {entries.map((entry, index) => (
+          <div
+            className={`ai-run-band__screen ai-run-band__screen--${entry.status}`}
+            key={`${entry.name}-${index}`}
+            ref={index === currentIndex ? currentRef : undefined}
+          >
+            <i />
+            <span className="ai-run-band__screen-name">{entry.name}</span>
+          </div>
+        ))}
+      </div>
     </div>
-  </div>
-)
+  )
+}
 
 const kickerText = (options: {
   phase: AiRunBandPhase
@@ -73,11 +88,17 @@ const BandActions = ({
         added noise without saying what the model just did. */}
     {phase === 'running' && latestActivity
       ? (
-          <small className="ai-run-band__activity shimmer">{latestActivity}</small>
+          <small className="ai-run-band__activity">{latestActivity}</small>
         )
       : null}
     {phase === 'running' && (
-      <Button type="button" variant="outline" className="ai-modal-btn-secondary" onClick={onCancel}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="ai-run-band__cancel"
+        onClick={onCancel}
+      >
         Cancel
       </Button>
     )}
@@ -111,7 +132,7 @@ export const AiRunBand = ({
   const showRail = !targetName && entries.length > 0
   const lines = getNarrationLines(narration)
   const closing = phase === 'error' ? (errorMessage ?? 'The run stopped unexpectedly.') : ''
-  const closingText = phase === 'done' ? summary : closing
+  const closingText = toPlainNarrationText(phase === 'done' ? summary : closing)
 
   return (
     <div

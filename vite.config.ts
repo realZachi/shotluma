@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 import { createAiRunLogPlugin } from './scripts/ai-run-log-plugin'
 import { createClientProviderDefinitions } from './scripts/client-provider-environment'
+import { createCodexBridgeAssetPlugin } from './scripts/codex-bridge-asset-plugin'
 
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -25,6 +26,7 @@ export default defineConfig(({ command, mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      createCodexBridgeAssetPlugin(),
       createAiRunLogPlugin({
         isEnabled: isAiLoggingEnabled,
         projectRoot: path.resolve(__dirname),

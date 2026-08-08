@@ -1,4 +1,5 @@
 export type AiProviderId =
+  | 'codex'
   | 'moonshot'
   | 'google'
   | 'qwen'
@@ -26,6 +27,7 @@ export type AiModelSelection = {
 
 export type AiModelOption = {
   id: string
+  providerModelId?: string
   label: string
   description: string
   reasoningEfforts?: readonly AiReasoningEffort[]
@@ -35,7 +37,8 @@ export type AiProviderOption = {
   id: AiProviderId
   label: string
   envVar: string
-  transport: 'direct' | 'proxy'
+  auth: 'apiKey' | 'chatgpt'
+  transport: 'bridge' | 'direct' | 'proxy'
   models: readonly AiModelOption[]
 }
 
@@ -95,9 +98,40 @@ export const OPENROUTER_REASONING_EFFORTS = [
 
 export const AI_PROVIDERS: readonly AiProviderOption[] = [
   {
+    id: 'codex',
+    label: 'Codex',
+    envVar: '',
+    auth: 'chatgpt',
+    transport: 'bridge',
+    models: [
+      {
+        id: 'codex/gpt-5.6-terra',
+        providerModelId: 'gpt-5.6-terra',
+        label: 'GPT-5.6 Terra',
+        description: 'Recommended · uses your ChatGPT plan, no API key',
+        reasoningEfforts: OPENAI_REASONING_EFFORTS,
+      },
+      {
+        id: 'codex/gpt-5.6-sol',
+        providerModelId: 'gpt-5.6-sol',
+        label: 'GPT-5.6 Sol',
+        description: 'Highest quality · uses your ChatGPT plan',
+        reasoningEfforts: OPENAI_REASONING_EFFORTS,
+      },
+      {
+        id: 'codex/gpt-5.6-luna',
+        providerModelId: 'gpt-5.6-luna',
+        label: 'GPT-5.6 Luna',
+        description: 'Fast and efficient · uses your ChatGPT plan',
+        reasoningEfforts: OPENAI_REASONING_EFFORTS,
+      },
+    ],
+  },
+  {
     id: 'moonshot',
     label: 'Moonshot',
     envVar: 'VITE_MOONSHOT_API_KEY',
+    auth: 'apiKey',
     transport: 'proxy',
     models: [
       {
@@ -112,6 +146,7 @@ export const AI_PROVIDERS: readonly AiProviderOption[] = [
     id: 'google',
     label: 'Google',
     envVar: 'VITE_GOOGLE_GENERATIVE_AI_API_KEY',
+    auth: 'apiKey',
     transport: 'direct',
     models: [
       {
@@ -138,6 +173,7 @@ export const AI_PROVIDERS: readonly AiProviderOption[] = [
     id: 'qwen',
     label: 'Qwen',
     envVar: 'VITE_ALIBABA_API_KEY',
+    auth: 'apiKey',
     transport: 'direct',
     models: [
       {
@@ -164,6 +200,7 @@ export const AI_PROVIDERS: readonly AiProviderOption[] = [
     id: 'openai',
     label: 'OpenAI',
     envVar: 'VITE_OPENAI_API_KEY',
+    auth: 'apiKey',
     transport: 'direct',
     models: [
       {
@@ -190,6 +227,7 @@ export const AI_PROVIDERS: readonly AiProviderOption[] = [
     id: 'anthropic',
     label: 'Anthropic',
     envVar: 'VITE_ANTHROPIC_API_KEY',
+    auth: 'apiKey',
     transport: 'direct',
     models: [
       {
@@ -222,6 +260,7 @@ export const AI_PROVIDERS: readonly AiProviderOption[] = [
     id: 'xai',
     label: 'xAI',
     envVar: 'VITE_XAI_API_KEY',
+    auth: 'apiKey',
     transport: 'direct',
     models: [
       {
@@ -236,6 +275,7 @@ export const AI_PROVIDERS: readonly AiProviderOption[] = [
     id: 'openrouter',
     label: 'OpenRouter',
     envVar: 'VITE_OPENROUTER_API_KEY',
+    auth: 'apiKey',
     transport: 'direct',
     // Curated recommendations; the full vision+tools catalog is fetched at
     // runtime (src/ai/openrouter-models.ts) and this list doubles as the
@@ -276,8 +316,8 @@ export const AI_PROVIDERS: readonly AiProviderOption[] = [
 ]
 
 export const DEFAULT_AI_SELECTION: AiModelSelection = {
-  provider: 'moonshot',
-  model: 'kimi-k3',
+  provider: 'codex',
+  model: 'codex/gpt-5.6-terra',
   reasoningEffort: DEFAULT_AI_REASONING_EFFORT,
 }
 

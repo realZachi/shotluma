@@ -48,6 +48,7 @@ import type { ComponentType } from 'react'
 const OPENROUTER_BROWSE_VALUE = 'openrouter:browse-all'
 
 const AI_PROVIDER_ICONS: Record<AiProviderId, ComponentType<{ className?: string; size?: number }>> = {
+  codex: ChatGpt,
   moonshot: KimiAi,
   google: GoogleGemini,
   qwen: Qwen,
@@ -64,6 +65,7 @@ export type AiProviderControlsProps = {
   onModelSelect: (providerId: AiProviderId, modelId: string) => void
   onReasoningEffortChange: (reasoningEffort: AiReasoningEffort) => void
   onManageKeys: (providerId: AiProviderId) => void
+  onConnectCodex: () => void
 }
 
 const triggerLabel = (
@@ -81,6 +83,7 @@ export const AiProviderControls = ({
   onModelSelect,
   onReasoningEffortChange,
   onManageKeys,
+  onConnectCodex,
 }: AiProviderControlsProps) => {
   const [isBrowsingOpenRouter, setBrowsingOpenRouter] = useState(false)
   const provider = getAiProvider(selection.provider)
@@ -155,9 +158,11 @@ export const AiProviderControls = ({
                       <span>
                         {availability[option.id]
                           ? option.label
-                          : transportAvailability[option.id]
-                            ? `${option.label} · key missing`
-                            : `${option.label} · local proxy unavailable`}
+                          : option.id === 'codex'
+                            ? `${option.label} · connect`
+                            : transportAvailability[option.id]
+                              ? `${option.label} · key missing`
+                              : `${option.label} · local proxy unavailable`}
                       </span>
                     </SelectLabel>
                     {option.models.map((modelOption) => (
@@ -215,9 +220,12 @@ export const AiProviderControls = ({
           <button
             type="button"
             className="ai-provider-keys-link"
-            onClick={() => onManageKeys(selection.provider)}
+            onClick={() => {
+              if (selection.provider === 'codex') onConnectCodex()
+              else onManageKeys(selection.provider)
+            }}
           >
-            API keys
+            {selection.provider === 'codex' ? 'Codex connection' : 'API keys'}
           </button>
         </div>
 
@@ -226,19 +234,24 @@ export const AiProviderControls = ({
             <AlertCircle size={15} />
             <div className="ai-provider-warning-body">
               <span>
-                {isTransportAvailable
-                  ? <><b>API key missing.</b> Add your {provider.label} key to generate with this model.</>
-                  : <><b>Local proxy unavailable.</b> Moonshot can be used only from localhost.</>}
+                {selection.provider === 'codex'
+                  ? <><b>Codex isn’t connected.</b> Use your ChatGPT plan without an API key.</>
+                  : isTransportAvailable
+                    ? <><b>API key missing.</b> Add your {provider.label} key to generate with this model.</>
+                    : <><b>Local proxy unavailable.</b> Moonshot can be used only from localhost.</>}
               </span>
-              {isTransportAvailable && (
+              {(selection.provider === 'codex' || isTransportAvailable) && (
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   className="ai-provider-warning-action"
-                  onClick={() => onManageKeys(selection.provider)}
+                  onClick={() => {
+                    if (selection.provider === 'codex') onConnectCodex()
+                    else onManageKeys(selection.provider)
+                  }}
                 >
-                  Enter API key
+                  {selection.provider === 'codex' ? 'Connect Codex' : 'Enter API key'}
                 </Button>
               )}
             </div>

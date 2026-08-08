@@ -34,6 +34,7 @@ vi.mock('./ui/popover', () => ({
 }))
 
 const availableTransports = {
+  codex: true,
   moonshot: true,
   google: true,
   qwen: true,
@@ -63,6 +64,7 @@ describe('AI provider controls', () => {
           reasoningEffort: 'high',
         }}
         availability={{
+          codex: false,
           moonshot: false,
           google: true,
           qwen: false,
@@ -75,6 +77,7 @@ describe('AI provider controls', () => {
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
         onManageKeys={() => undefined}
+        onConnectCodex={() => undefined}
       />,
     )
 
@@ -89,6 +92,7 @@ describe('AI provider controls', () => {
       <AiProviderControls
         selection={{ provider: 'openai', model: 'gpt-5.6-terra' }}
         availability={{
+          codex: false,
           moonshot: true,
           google: true,
           qwen: true,
@@ -101,6 +105,7 @@ describe('AI provider controls', () => {
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
         onManageKeys={() => undefined}
+        onConnectCodex={() => undefined}
       />,
     )
 
@@ -113,6 +118,39 @@ describe('AI provider controls', () => {
     expect(markup).not.toContain('.env.local')
   })
 
+  it('offers the ChatGPT connection instead of an API key for Codex', () => {
+    const markup = renderToStaticMarkup(
+      <AiProviderControls
+        selection={{
+          provider: 'codex',
+          model: 'codex/gpt-5.6-terra',
+          reasoningEffort: 'high',
+        }}
+        availability={{
+          codex: false,
+          moonshot: false,
+          google: false,
+          qwen: false,
+          openai: false,
+          anthropic: false,
+          xai: false,
+          openrouter: false,
+        }}
+        transportAvailability={availableTransports}
+        onModelSelect={() => undefined}
+        onReasoningEffortChange={() => undefined}
+        onManageKeys={() => undefined}
+        onConnectCodex={() => undefined}
+      />,
+    )
+
+    expect(markup).toContain('Codex isn’t connected.')
+    expect(markup).toContain('Use your ChatGPT plan without an API key.')
+    expect(markup).toContain('Connect Codex')
+    expect(markup).toContain('Codex connection')
+    expect(markup).not.toContain('Enter API key')
+  })
+
   it('shows model-specific reasoning effort chips and omits them for models without effort', () => {
     const openAiMarkup = renderToStaticMarkup(
       <AiProviderControls
@@ -122,6 +160,7 @@ describe('AI provider controls', () => {
           reasoningEffort: 'high',
         }}
         availability={{
+          codex: false,
           moonshot: false,
           google: false,
           qwen: false,
@@ -134,6 +173,7 @@ describe('AI provider controls', () => {
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
         onManageKeys={() => undefined}
+        onConnectCodex={() => undefined}
       />,
     )
 
@@ -154,6 +194,7 @@ describe('AI provider controls', () => {
           reasoningEffort: 'high',
         }}
         availability={{
+          codex: false,
           moonshot: true,
           google: false,
           qwen: false,
@@ -166,6 +207,7 @@ describe('AI provider controls', () => {
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
         onManageKeys={() => undefined}
+        onConnectCodex={() => undefined}
       />,
     )
 
@@ -188,6 +230,7 @@ describe('AI provider controls', () => {
           reasoningEffort: 'high',
         }}
         availability={{
+          codex: false,
           moonshot: false,
           google: false,
           qwen: false,
@@ -200,6 +243,7 @@ describe('AI provider controls', () => {
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
         onManageKeys={() => undefined}
+        onConnectCodex={() => undefined}
       />,
     )
 
@@ -213,6 +257,7 @@ describe('AI provider controls', () => {
       <AiProviderControls
         selection={{ provider: 'moonshot', model: 'kimi-k3' }}
         availability={{
+          codex: false,
           moonshot: false,
           google: false,
           qwen: false,
@@ -225,6 +270,7 @@ describe('AI provider controls', () => {
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
         onManageKeys={() => undefined}
+        onConnectCodex={() => undefined}
       />,
     )
 

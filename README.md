@@ -16,12 +16,13 @@ Describe your app, upload raw screenshots, and an AI agent designs the full set 
 
 ![Shotluma's AI agent generating a complete, editable App Store screenshot set](docs/assets/demos/shotluma-overview.gif)
 
-Projects live entirely in your browser — no account, no backend. The editor itself works without any API key; bring your own key only for AI generation.
+Projects live entirely in your browser — no Shotluma account or project backend. The editor itself works without AI credentials. For AI generation, connect a local Codex app/CLI signed in with your ChatGPT plan, or bring your own provider key.
 
 ## Features
 
 - **AI that designs, not renders** — the agent works through editor tool calls, so its output is a normal project: every element it creates is selectable and editable, and you can revise a single screen with the magic-cursor action instead of regenerating everything.
-- **Bring your own model** — works with Moonshot, Google, Qwen, OpenAI, and Anthropic; pick provider and model per run.
+- **Use your ChatGPT plan** — connect the Codex app or CLI to the hosted editor without giving Shotluma an API key.
+- **Bring your own model** — also works with Moonshot, Google, Qwen, OpenAI, Anthropic, xAI, and OpenRouter; pick provider and model per run.
 - **Full screenshot sets** — design a multi-screen story on portrait artboards, not one image at a time.
 - **Direct manipulation** — typography, gradients, shapes, images, mockups, alignment, stacking, and spacing are all hand-editable, with or without AI.
 - **Perspective device mockups** — drop a raw screenshot into a device frame with correct 3D geometry.
@@ -58,7 +59,16 @@ Projects save automatically to the current browser profile. Clearing site data d
 
 ## Set up AI generation
 
-AI generation needs an API key for at least one provider — everything else in the editor works without one. Enter keys in the generation dialog (**API keys** / **Enter API key**); they are stored unencrypted in this browser's `localStorage`. Use dedicated provider keys with restrictive quotas, and remove them before sharing the browser profile or device.
+The recommended hosted flow uses your ChatGPT plan and needs no API key:
+
+1. Open [app.shotluma.com](https://app.shotluma.com), choose **Generate with AI**, select a Codex model, and click **Connect Codex**.
+2. Click **Open in ChatGPT**. The desktop app opens a new local Codex chat with the setup prompt filled in; press **Send**. If the app is unavailable, copy the prompt and paste it into the Codex app or CLI instead.
+3. Let Codex download and inspect Shotluma's small local connector. Return to the browser and click **Check connection**.
+4. Keep using the hosted editor normally. You do not clone, build, or self-host Shotluma.
+
+The connector listens only on `127.0.0.1`, accepts the exact paired Shotluma origin and a random browser pairing token, and delegates authentication to Codex App Server. It does not read or copy ChatGPT tokens. Codex must already be installed and signed in with ChatGPT on that computer. Stop it with `node ~/.local/share/shotluma/shotluma-codex-bridge.mjs stop`.
+
+Alternatively, enter a provider key in the generation dialog (**API keys** / **Enter API key**). Keys are stored unencrypted in this browser's `localStorage`. Use dedicated keys with restrictive quotas, and remove them before sharing the browser profile or device.
 
 For local development you can still use `.env.local` as a fallback:
 
@@ -79,8 +89,9 @@ Restart the dev server after changing `.env.local` keys. Pick the provider and m
 
 How it works, and what to know:
 
-- Google, Qwen, OpenAI, Anthropic, and xAI are called directly from the browser via the AI SDK. Moonshot works only on localhost through the local `/api/moonshot` CORS proxy.
-- When you start a run, your description and selected screenshots are sent to that provider. Normal editing, persistence, and export never call any AI service. Provider charges may apply.
+- Codex runs go from the hosted browser to the paired loopback connector and then to Codex App Server. The connector exposes only the account, model, thread, turn, and Shotluma dynamic-tool RPC surface; Codex gets a read-only empty workspace with network access disabled.
+- Google, Qwen, OpenAI, Anthropic, xAI, and OpenRouter are called directly from the browser via the AI SDK. Moonshot works only on localhost through the local `/api/moonshot` CORS proxy.
+- When you start a run, your description and selected screenshots are sent to the selected provider or through Codex. Normal editing, persistence, and export never call any AI service. Provider limits or charges may apply.
 - Browser-stored keys are visible to same-origin JavaScript by design. Optional `VITE_*` keys are exposed only by the local dev server; production builds replace every provider env key with an empty value. Never commit `.env.local` (see [Self-hosting](#self-hosting)).
 - Prompts can be written in any language; generated canvas copy and summaries are in English.
 
@@ -105,13 +116,13 @@ Changes to rendering, export, or AI behavior also need manual verification in th
 
 ## Self-hosting
 
-`bun run build` produces a static app in `dist/`. Provider env values are stripped from this bundle, so it can be hosted as a static site while users supply their own direct-provider keys in the browser.
+`bun run build` produces a static app in `dist/`, including the downloadable Codex connector at `codex/shotluma-codex-bridge.mjs`. Provider env values are stripped from the bundle, so it can be hosted as a static site while users connect Codex or supply their own direct-provider keys in the browser.
 
 The official editor is deployed at `https://app.shotluma.com`. The marketing
 site at `https://shotluma.com` is maintained and deployed separately; its source
 and production configuration are not part of this repository.
 
-Google, Qwen, OpenAI, Anthropic, and xAI work with browser-entered keys. Moonshot
+Codex connection prompts pair against the deployment's own origin. Google, Qwen, OpenAI, Anthropic, xAI, and OpenRouter work with browser-entered keys. Moonshot
 remains local-only; offering it on a hosted deployment requires an authenticated
 proxy. A hosted workflow with shared credentials likewise needs a backend or
 short-lived credential exchange.

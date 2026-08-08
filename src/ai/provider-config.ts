@@ -32,6 +32,7 @@ const readKey = (value: unknown): string =>
   typeof value === 'string' ? value.trim() : ''
 
 export const createEmptyAiProviderKeys = (): AiProviderKeys => ({
+  codex: '',
   moonshot: '',
   google: '',
   qwen: '',
@@ -44,6 +45,7 @@ export const createEmptyAiProviderKeys = (): AiProviderKeys => ({
 export const createAiProviderKeys = (
   environment: AiProviderEnvironment,
 ): AiProviderKeys => ({
+  codex: '',
   moonshot: readKey(environment.VITE_MOONSHOT_API_KEY),
   google: readKey(environment.VITE_GOOGLE_GENERATIVE_AI_API_KEY),
   qwen: readKey(environment.VITE_ALIBABA_API_KEY),
@@ -56,6 +58,7 @@ export const createAiProviderKeys = (
 export const getAiProviderAvailability = (
   keys: AiProviderKeys,
 ): AiProviderAvailability => ({
+  codex: false,
   moonshot: keys.moonshot.length > 0,
   google: keys.google.length > 0,
   qwen: keys.qwen.length > 0,
@@ -84,6 +87,7 @@ export const isLocalAiProxyHostname = (hostname: string): boolean => {
 export const getAiProviderTransportAvailability = (
   hostname: string = getBrowserHostname(),
 ): AiProviderAvailability => ({
+  codex: true,
   moonshot: isLocalAiProxyHostname(hostname),
   google: true,
   qwen: true,

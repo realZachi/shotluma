@@ -64,7 +64,8 @@ describe('AiRunBand', () => {
   it('names the latest action without a count', () => {
     const html = markup({ latestActivity: 'Preview checked' })
     expect(html).toContain('Preview checked')
-    expect(html).toContain('ai-run-band__activity shimmer')
+    expect(html).toContain('ai-run-band__activity')
+    expect(html).not.toContain('shimmer')
     expect(html).not.toContain('actions')
     expect(html).not.toContain('update_element')
   })
@@ -112,6 +113,7 @@ describe('AiRunBand', () => {
   it('offers cancel while running and nothing else', () => {
     const html = markup()
     expect(html).toContain('Cancel')
+    expect(html).toContain('ai-run-band__cancel')
     expect(html).not.toContain('Try again')
   })
 
@@ -121,6 +123,17 @@ describe('AiRunBand', () => {
     expect(html).toContain('A warm, gentle set.')
     expect(html).toContain('Done')
     expect(html).not.toContain('Cancel')
+  })
+
+  it('renders a provider-formatted completion as plain band copy', () => {
+    const html = markup({
+      phase: 'done',
+      slidesBuilt: 1,
+      summary: '### **Screenshot set complete**',
+    })
+    expect(html).toContain('Screenshot set complete')
+    expect(html).not.toContain('**')
+    expect(html).not.toContain('###')
   })
 
   it('drops unbuilt screens from a finished run', () => {

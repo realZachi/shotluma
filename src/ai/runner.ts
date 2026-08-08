@@ -9,6 +9,8 @@ import {
   type ToolSet,
 } from 'ai'
 import { uid } from '../utils'
+import { runCodexAppServerGeneration } from './codex-app-server'
+import { readCodexConnection } from './codex-connection'
 import { scopeAiControllerToSlide, type AiEditorController } from './controller'
 import { buildInstructions, buildUserMessage } from './prompt'
 import {
@@ -33,79 +35,18 @@ import {
   type AiRunToolCall,
 } from './run-log'
 import { saveAiRunReport } from './run-log-client'
-import { parsePlanInput, type PlannedScreen } from './run-plan'
+import { parsePlanInput } from './run-plan'
+import { describeAiToolCall } from './tool-call-description'
 import { createEditorTools } from './tools'
+import type { AiRunEvent } from './run-events'
 import type { AiToolActivity } from './tools'
 
 export type { AiToolActivity } from './tools'
-
-export type AiRunEvent =
-  | { type: 'status'; message: string }
-  | { type: 'tool'; name: string; detail: string }
-  | { type: 'text'; delta: string }
-  | { type: 'reasoning'; delta: string }
-  | { type: 'plan'; screens: PlannedScreen[] }
-  | { type: 'slide-started'; index: number }
-  | { type: 'done'; summary: string; slidesCreated: number }
-  | { type: 'error'; message: string }
+export type { AiRunEvent } from './run-events'
 
 type UserContent =
   | { type: 'text'; text: string }
   | { type: 'file'; mediaType: string; data: string }
-
-const truncate = (value: string, max: number) => (value.length > max ? `${value.slice(0, max)}…` : value)
-
-/** Tools whose activity line never depends on their input. */
-const STATIC_TOOL_DETAILS: Record<string, string> = {
-  get_canvas_state: 'Canvas state retrieved',
-  add_slide: 'New screen created',
-  set_slide_background: 'Background updated',
-  delete_slide: 'Screen deleted',
-  add_image: 'Image added',
-  set_device_screenshot: 'Device screenshot replaced',
-  update_element: 'Element updated',
-  delete_element: 'Element deleted',
-  inspect_slide: 'Layout measured',
-  render_slide_preview: 'Preview checked',
-  remove_asset_background: 'Overlay background removed',
-}
-
-const describeToolCall = (toolName: string, input: unknown): string => {
-  const staticDetail = STATIC_TOOL_DETAILS[toolName]
-  if (staticDetail !== undefined) return staticDetail
-
-  const data = (input && typeof input === 'object' ? (input as Record<string, unknown>) : {})
-  switch (toolName) {
-    case 'declare_plan': {
-      const count = parsePlanInput(input).length
-      return count > 0 ? `Plan declared: ${count} screens` : 'Plan declared'
-    }
-    case 'rename_slide':
-      return typeof data['name'] === 'string'
-        ? `Screen renamed: “${truncate(data['name'], 30)}”`
-        : 'Screen renamed'
-    case 'add_text':
-      return typeof data['text'] === 'string'
-        ? `Text: “${truncate(data['text'], 30)}”`
-        : 'Text added'
-    case 'add_device':
-      return typeof data['deviceStyle'] === 'string'
-        ? `Device added (${data['deviceStyle']})`
-        : 'Device added'
-    case 'add_shape':
-      return typeof data['shape'] === 'string'
-        ? `Shape added (${data['shape']})`
-        : 'Shape added'
-    case 'create_overlay_asset':
-      return typeof data['name'] === 'string'
-        ? `Overlay asset: “${truncate(data['name'], 30)}”`
-        : typeof data['prompt'] === 'string'
-          ? `Overlay asset: “${truncate(data['prompt'], 30)}”`
-          : 'Overlay asset generated'
-    default:
-      return `Tool: ${toolName}`
-  }
-}
 
 const extractMediaType = (dataUrl: string): string => {
   const match = /^data:([^;,]+)/.exec(dataUrl)
@@ -161,6 +102,8 @@ const createAiModel = async (selection: AiModelSelection) => {
   }
 
   switch (selection.provider) {
+    case 'codex':
+      throw new Error('Codex subscription runs must use the local Shotluma Codex Bridge')
     case 'moonshot': {
       const { createOpenAI } = await import('@ai-sdk/openai')
       return createOpenAI({
@@ -235,6 +178,31 @@ type AiRunAccumulator = {
   hadError: boolean
 }
 
+const collectCodexEvent = (options: {
+  event: AiRunEvent
+  runStartedAt: number
+  accumulator: AiRunAccumulator
+  onEvent: (event: AiRunEvent) => void
+}) => {
+  const { event, runStartedAt, accumulator, onEvent } = options
+  if (event.type === 'text') accumulator.assistantOutput += event.delta
+  else if (event.type === 'reasoning') accumulator.reasoningOutput += event.delta
+  else if (event.type === 'tool') {
+    accumulator.toolCalls.push({
+      name: event.name,
+      detail: event.detail,
+      offsetMs: Date.now() - runStartedAt,
+    })
+  } else if (event.type === 'slide-started') {
+    accumulator.slidesCreated = event.index + 1
+  } else if (event.type === 'done') {
+    accumulator.assistantOutput = event.summary
+    accumulator.slidesCreated = event.slidesCreated
+    accumulator.finishReason = 'stop'
+  }
+  onEvent(event)
+}
+
 const collectStreamPart = <TOOLS extends ToolSet>(options: {
   part: TextStreamPart<TOOLS>
   selection: AiModelSelection
@@ -263,7 +231,7 @@ const collectStreamPart = <TOOLS extends ToolSet>(options: {
         onEvent({ type: 'slide-started', index: accumulator.slidesCreated })
         accumulator.slidesCreated += 1
       }
-      const detail = describeToolCall(part.toolName, part.input)
+      const detail = describeAiToolCall(part.toolName, part.input)
       accumulator.toolCalls.push({
         name: part.toolName,
         detail,
@@ -356,6 +324,155 @@ const openAiGenerationStream = (options: {
   })
 }
 
+const runCodexProviderGeneration = async (options: {
+  selection: AiModelSelection
+  description: string
+  screenshots: PreparedAsset[]
+  appName?: string
+  logo?: PreparedAsset
+  controller: AiEditorController
+  targetSlideId?: string
+  signal?: AbortSignal
+  runStartedAt: number
+  accumulator: AiRunAccumulator
+  onEvent: (event: AiRunEvent) => void
+  onActivity?: (activity: AiToolActivity) => void
+}) => {
+  const connection = readCodexConnection()
+  if (!connection) {
+    throw new Error('Connect Codex to Shotluma before generating with your ChatGPT plan')
+  }
+  await runCodexAppServerGeneration({
+    connection,
+    selection: options.selection,
+    description: options.description,
+    screenshots: options.screenshots,
+    ...(options.appName !== undefined ? { appName: options.appName } : {}),
+    ...(options.logo ? { logo: options.logo } : {}),
+    controller: options.controller,
+    ...(options.targetSlideId ? { targetSlideId: options.targetSlideId } : {}),
+    ...(options.signal ? { signal: options.signal } : {}),
+    onEvent: (event) => collectCodexEvent({
+      event,
+      runStartedAt: options.runStartedAt,
+      accumulator: options.accumulator,
+      onEvent: options.onEvent,
+    }),
+    ...(options.onActivity ? { onActivity: options.onActivity } : {}),
+  })
+}
+
+const runDirectProviderGeneration = async (options: {
+  selection: AiModelSelection
+  description: string
+  screenshots: PreparedAsset[]
+  appName?: string
+  logo?: PreparedAsset
+  controller: AiEditorController
+  targetSlideId?: string
+  enableOverlayAssets?: boolean
+  signal?: AbortSignal
+  runStartedAt: number
+  accumulator: AiRunAccumulator
+  onEvent: (event: AiRunEvent) => void
+  onActivity?: (activity: AiToolActivity) => void
+}): Promise<AiRunReport['outcome']> => {
+  const {
+    selection,
+    description,
+    screenshots,
+    appName,
+    logo,
+    controller,
+    targetSlideId,
+    enableOverlayAssets,
+    signal,
+    runStartedAt,
+    accumulator,
+    onEvent,
+    onActivity,
+  } = options
+  const provider = getAiProvider(selection.provider)
+  const modelOption = getAiModel(selection)
+  const reasoning = getAiSdkReasoningEffort(selection)
+  const model = await createAiModel(selection)
+  const content = buildUserContent({
+    description,
+    screenshots,
+    ...(appName !== undefined ? { appName } : {}),
+    ...(logo ? { logo } : {}),
+    ...(targetSlideId ? { targetSlideId } : {}),
+  })
+
+  onEvent({
+    type: 'status',
+    message: `Connecting to ${[
+      provider.label,
+      modelOption.label,
+      ...(reasoning ? [`${AI_REASONING_EFFORT_LABELS[reasoning]} effort`] : []),
+    ].join(' · ')}…`,
+  })
+
+  const result = openAiGenerationStream({
+    model,
+    selection,
+    controller,
+    content,
+    ...(targetSlideId ? { targetSlideId } : {}),
+    ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
+    ...(signal ? { signal } : {}),
+    ...(onActivity ? { onActivity } : {}),
+  })
+
+  for await (const part of result.stream) {
+    if (signal?.aborted) break
+    collectStreamPart({
+      part,
+      selection,
+      runStartedAt,
+      accumulator,
+      onEvent,
+    })
+  }
+
+  if (signal?.aborted) {
+    onEvent({ type: 'status', message: 'Cancelled' })
+    return 'cancelled'
+  }
+  if (accumulator.hadError) return 'failed'
+
+  let finalText = accumulator.assistantOutput.trim()
+  try {
+    const resolvedText = await result.text
+    if (resolvedText.trim().length > 0) finalText = resolvedText.trim()
+  } catch {
+    // fall back to accumulated deltas below
+  }
+
+  if (!accumulator.usage) {
+    try {
+      accumulator.usage = toAiRunTokenUsage(await result.usage)
+    } catch {
+      // Some providers omit usage even when the text stream completes.
+    }
+  }
+  if (!accumulator.finishReason) {
+    try {
+      accumulator.finishReason = await result.finishReason
+    } catch {
+      // The visible completion remains valid if finish metadata is unavailable.
+    }
+  }
+
+  accumulator.assistantOutput = finalText
+  onEvent({
+    type: 'done',
+    summary: finalText,
+    slidesCreated: accumulator.slidesCreated,
+  })
+  return 'completed'
+}
+
 export async function runAiGeneration(options: {
   selection: AiModelSelection
   description: string
@@ -417,89 +534,40 @@ export async function runAiGeneration(options: {
   }
 
   try {
-    const provider = getAiProvider(selection.provider)
-    const modelOption = getAiModel(selection)
-    const reasoning = getAiSdkReasoningEffort(selection)
-    const model = await createAiModel(selection)
-    const content = buildUserContent({
+    if (selection.provider === 'codex') {
+      await runCodexProviderGeneration({
+        selection,
+        description,
+        screenshots,
+        ...(appName !== undefined ? { appName } : {}),
+        ...(logo ? { logo } : {}),
+        controller,
+        ...(targetSlideId ? { targetSlideId } : {}),
+        ...(signal ? { signal } : {}),
+        runStartedAt,
+        accumulator,
+        onEvent,
+        ...(onActivity ? { onActivity } : {}),
+      })
+      await finishRun('completed')
+      return
+    }
+    const outcome = await runDirectProviderGeneration({
+      selection,
       description,
       screenshots,
       ...(appName !== undefined ? { appName } : {}),
       ...(logo ? { logo } : {}),
-      ...(targetSlideId ? { targetSlideId } : {}),
-    })
-
-    onEvent({
-      type: 'status',
-      message: `Connecting to ${[
-        provider.label,
-        modelOption.label,
-        ...(reasoning ? [`${AI_REASONING_EFFORT_LABELS[reasoning]} effort`] : []),
-      ].join(' · ')}…`,
-    })
-
-    const result = openAiGenerationStream({
-      model,
-      selection,
       controller,
-      content,
       ...(targetSlideId ? { targetSlideId } : {}),
       ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
       ...(signal ? { signal } : {}),
+      runStartedAt,
+      accumulator,
+      onEvent,
       ...(onActivity ? { onActivity } : {}),
     })
-
-    for await (const part of result.stream) {
-      if (signal?.aborted) break
-      collectStreamPart({
-        part,
-        selection,
-        runStartedAt,
-        accumulator,
-        onEvent,
-      })
-    }
-
-    if (signal?.aborted) {
-      onEvent({ type: 'status', message: 'Cancelled' })
-      await finishRun('cancelled')
-      return
-    }
-    if (accumulator.hadError) {
-      await finishRun('failed')
-      return
-    }
-
-    let finalText = accumulator.assistantOutput.trim()
-    try {
-      const resolvedText = await result.text
-      if (resolvedText.trim().length > 0) finalText = resolvedText.trim()
-    } catch {
-      // fall back to accumulated deltas below
-    }
-
-    if (!accumulator.usage) {
-      try {
-        accumulator.usage = toAiRunTokenUsage(await result.usage)
-      } catch {
-        // Some providers omit usage even when the text stream completes.
-      }
-    }
-    if (!accumulator.finishReason) {
-      try {
-        accumulator.finishReason = await result.finishReason
-      } catch {
-        // The visible completion remains valid if finish metadata is unavailable.
-      }
-    }
-
-    accumulator.assistantOutput = finalText
-    onEvent({
-      type: 'done',
-      summary: finalText,
-      slidesCreated: accumulator.slidesCreated,
-    })
-    await finishRun('completed')
+    await finishRun(outcome)
   } catch (error) {
     if (isAbortError(error)) {
       onEvent({ type: 'status', message: 'Cancelled' })

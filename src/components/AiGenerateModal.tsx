@@ -20,16 +20,19 @@ import {
 import {
   appendNarrationDelta,
   createNarrationState,
+  finishNarrationSegment,
   flushNarration,
   type NarrationState,
 } from '../ai/run-narration'
 import { runAiGeneration, type AiRunEvent, type AiToolActivity } from '../ai/runner'
+import { useCodexConnection } from '../ai/use-codex-connection'
 import { fileToDataUrl, uid } from '../utils'
 import { filterAcceptedImageFiles } from './ai-modal-image-files'
 import { shouldCloseAiModalOnKeydown } from './ai-modal-keyboard'
 import { AiApiKeysDialog } from './AiApiKeysDialog'
 import { AiProviderControls } from './AiProviderControls'
 import { AiRunBand } from './AiRunBand'
+import { CodexConnectionDialog } from './CodexConnectionDialog'
 import { CopyCodingPromptButton } from './CopyCodingPrompt'
 import { AiGenerative, Plus, Upload, X } from './icons'
 import { Button } from './ui/button'
@@ -319,6 +322,7 @@ const ModalFooter = ({
   onModelSelect,
   onReasoningEffortChange,
   onManageKeys,
+  onConnectCodex,
   onGenerate,
 }: {
   isEditMode: boolean
@@ -329,6 +333,7 @@ const ModalFooter = ({
   onModelSelect: (provider: AiProviderId, modelId: string) => void
   onReasoningEffortChange: (reasoningEffort: NonNullable<AiModelSelection['reasoningEffort']>) => void
   onManageKeys: (providerId: AiProviderId) => void
+  onConnectCodex: () => void
   onGenerate: () => void
 }) => (
   <>
@@ -339,6 +344,7 @@ const ModalFooter = ({
       onModelSelect={onModelSelect}
       onReasoningEffortChange={onReasoningEffortChange}
       onManageKeys={onManageKeys}
+      onConnectCodex={onConnectCodex}
     />
     <Button
       type="button"
@@ -371,7 +377,12 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
   const [keysDialogOpen, setKeysDialogOpen] = useState(false)
   const [keysDialogInstance, setKeysDialogInstance] = useState(0)
   const [keysFocusProviderId, setKeysFocusProviderId] = useState<AiProviderId | undefined>()
-  const availability: AiProviderAvailability = getResolvedAiProviderAvailability()
+  const [codexDialogOpen, setCodexDialogOpen] = useState(false)
+  const codexConnection = useCodexConnection()
+  const availability: AiProviderAvailability = {
+    ...getResolvedAiProviderAvailability(),
+    codex: codexConnection.isConnected,
+  }
   const transportAvailability = getAiProviderTransportAvailability()
   void keysRevision
 
@@ -381,13 +392,13 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
   const cancelledRef = useRef(false)
 
   const requestClose = () => {
-    if (phase === 'running' || keysDialogOpen) return
+    if (phase === 'running' || keysDialogOpen || codexDialogOpen) return
     setPhase('idle')
     onClose()
   }
 
   useEffect(() => {
-    if (!open || keysDialogOpen) return
+    if (!open || keysDialogOpen || codexDialogOpen) return
     const handleKeydown = (event: KeyboardEvent) => {
       const isNestedPopupOpen = Boolean(document.querySelector(
         '[data-slot="select-content"], [data-slot="popover-content"]',
@@ -397,7 +408,7 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
     window.addEventListener('keydown', handleKeydown, true)
     return () => window.removeEventListener('keydown', handleKeydown, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, phase, keysDialogOpen])
+  }, [open, phase, keysDialogOpen, codexDialogOpen])
 
   if (!open) return null
 
@@ -414,6 +425,11 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
     setKeysFocusProviderId(providerId)
     setKeysDialogInstance((current) => current + 1)
     setKeysDialogOpen(true)
+  }
+
+  const handleConnectCodex = () => {
+    if (!codexConnection.view.connection) codexConnection.createSetup()
+    setCodexDialogOpen(true)
   }
 
   const handleLogoFiles = async (files: File[]) => {
@@ -451,7 +467,9 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
     // `index` is the count of screens finished before this one, which is exactly the
     // rail's "built" count while this screen is in progress.
     else if (event.type === 'slide-started') setSlidesBuilt(event.index)
-    else if (event.type === 'text') {
+    else if (event.type === 'narration-boundary') {
+      setNarration((current) => finishNarrationSegment(current, event.source))
+    } else if (event.type === 'text') {
       setAssistantText((current) => current + event.delta)
       setNarration((current) => appendNarrationDelta(current, 'text', event.delta))
     } else if (event.type === 'reasoning') {
@@ -594,6 +612,7 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
                 setSelection((current) => ({ ...current, reasoningEffort }))
               }}
               onManageKeys={handleManageKeys}
+              onConnectCodex={handleConnectCodex}
               onGenerate={() => void handleGenerate()}
             />
           </div>
@@ -605,6 +624,14 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
         {...(keysFocusProviderId ? { focusProviderId: keysFocusProviderId } : {})}
         onOpenChange={setKeysDialogOpen}
         onSaved={refreshAvailability}
+      />
+      <CodexConnectionDialog
+        open={codexDialogOpen}
+        view={codexConnection.view}
+        onOpenChange={setCodexDialogOpen}
+        onCreateSetup={() => { codexConnection.createSetup() }}
+        onCheckConnection={() => { void codexConnection.checkConnection() }}
+        onDisconnect={codexConnection.disconnect}
       />
     </>
   )

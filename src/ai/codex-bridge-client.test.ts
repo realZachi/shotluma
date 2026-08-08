@@ -1,0 +1,102 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { CodexBridgeClient, probeCodexBridge } from './codex-bridge-client'
+import type { CodexConnection } from './codex-connection'
+
+const connection: CodexConnection = {
+  version: 1,
+  pairingToken: 'A'.repeat(43),
+  appOrigin: 'https://app.shotluma.com',
+}
+
+const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status,
+  headers: { 'Content-Type': 'application/json' },
+})
+
+describe('Codex bridge client', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps the browser Window receiver when using the default fetch', async () => {
+    const browserFetch = vi.fn(function (this: unknown) {
+      if (this !== globalThis) throw new TypeError('Illegal invocation')
+      return Promise.resolve(jsonResponse({
+        bridgeVersion: 1,
+        appServer: { ready: true, error: null, sequence: 3 },
+      }))
+    })
+    vi.stubGlobal('fetch', browserFetch)
+
+    await expect(probeCodexBridge({ connection })).resolves.toMatchObject({
+      bridgeVersion: 1,
+      appServerReady: true,
+    })
+    expect(browserFetch).toHaveBeenCalledOnce()
+  })
+
+  it('validates the bridge and App Server status response', async () => {
+    const fetcher = async () => jsonResponse({
+      bridgeVersion: 1,
+      appServer: { ready: true, error: null, sequence: 7 },
+    })
+    await expect(probeCodexBridge({ connection, fetcher })).resolves.toEqual({
+      bridgeVersion: 1,
+      appServerReady: true,
+      appServerError: null,
+      sequence: 7,
+    })
+
+    await expect(probeCodexBridge({
+      connection,
+      fetcher: async () => jsonResponse({ ready: true }),
+    })).rejects.toThrow('invalid status')
+  })
+
+  it('matches an App Server response to its pending request', async () => {
+    let requestId = ''
+    let eventDelivered = false
+    let deliverEvent: (() => void) | null = null
+    const waitForAbort = (signal: AbortSignal | null) => new Promise<Response>((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), {
+        once: true,
+      })
+    })
+    const fetcher: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url
+      if (url.endsWith('/v1/status')) {
+        return jsonResponse({
+          bridgeVersion: 1,
+          appServer: { ready: true, error: null, sequence: 0 },
+        })
+      }
+      if (url.endsWith('/v1/rpc')) {
+        if (typeof init?.body !== 'string') throw new Error('Expected a JSON request body')
+        const body: unknown = JSON.parse(init.body)
+        if (body && typeof body === 'object' && 'id' in body) requestId = String(body.id)
+        deliverEvent?.()
+        return jsonResponse({ accepted: true }, 202)
+      }
+      if (!eventDelivered) {
+        await new Promise<void>((resolve) => {
+          deliverEvent = resolve
+        })
+        eventDelivered = true
+        return jsonResponse({
+          events: [{ sequence: 1, message: { id: requestId, result: { ok: true } } }],
+          sequence: 1,
+        })
+      }
+      return waitForAbort(init?.signal ?? null)
+    }
+
+    const client = new CodexBridgeClient(connection, fetcher)
+    await client.connect()
+    await expect(client.request('account/read', {})).resolves.toEqual({ ok: true })
+    client.close()
+  })
+})

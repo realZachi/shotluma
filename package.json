@@ -19,6 +19,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "codex:bridge": "bun scripts/shotluma-codex-bridge.ts",
     "typecheck": "tsc -b",
     "build": "bun run typecheck && vite build",
     "deploy": "bun run build && wrangler deploy",

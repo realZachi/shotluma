@@ -844,6 +844,60 @@ button:disabled { cursor: not-allowed; opacity: .35; }
 }
 .ai-provider-warning-action { align-self: flex-start; }
 
+.codex-connect-dialog {
+  width: min(calc(100vw - 32px), 620px);
+  max-width: 620px;
+  max-height: min(760px, calc(100vh - 32px));
+  overflow-y: auto;
+}
+.codex-connect-dialog [data-slot="alert-dialog-header"] {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  place-items: start;
+  gap: 3px 12px;
+  text-align: left;
+}
+.codex-connect-dialog [data-slot="alert-dialog-media"] {
+  grid-row: 1 / span 2;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+}
+.codex-connect-dialog [data-slot="alert-dialog-title"],
+.codex-connect-dialog [data-slot="alert-dialog-description"] { grid-column: 2; }
+.codex-connect-setup { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.codex-connect-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.codex-connect-steps li { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 10px; border: 1px solid; border-radius: 9px; }
+.codex-connect-steps li > span { flex: 0 0 auto; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; font-size: 9px; font-weight: 720; }
+.codex-connect-steps p { display: flex; flex-direction: column; gap: 2px; margin: 0; font-size: 9px; line-height: 1.35; }
+.codex-connect-steps b { font-size: 10px; }
+.codex-connect-prompt { max-height: 190px; overflow: auto; border: 1px solid; border-radius: 9px; padding: 10px; }
+.codex-connect-prompt code { display: block; font-size: 9px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.codex-connect-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.codex-connect-app-fallback { margin: -4px 0 0; font-size: 9px; line-height: 1.4; }
+.codex-connect-message { margin: 0; border: 1px solid; border-radius: 8px; padding: 9px 10px; font-size: 10px; line-height: 1.4; }
+.codex-connect-privacy { display: flex; align-items: flex-start; gap: 7px; font-size: 9px; line-height: 1.4; }
+.codex-connect-privacy svg { flex: 0 0 auto; margin-top: 1px; }
+.codex-connect-success { display: flex; align-items: center; gap: 10px; border: 1px solid; border-radius: 10px; padding: 12px; }
+.codex-connect-success__icon { flex: 0 0 auto; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; }
+.codex-connect-success > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.codex-connect-success b { font-size: 11px; }
+.codex-connect-success div span { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.codex-connect-dialog :is([data-slot="button"], [data-slot="alert-dialog-cancel"]) {
+  height: 29px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  font-size: var(--editor-text-sm);
+  font-weight: 520;
+  line-height: 1;
+}
+
+@media (max-width: 620px) {
+  .codex-connect-steps { grid-template-columns: 1fr; }
+  .codex-connect-actions { grid-template-columns: 1fr; }
+}
+
 .ai-openrouter-search { position: relative; }
 .ai-openrouter-search svg {
   position: absolute;
@@ -1006,6 +1060,8 @@ button:disabled { cursor: not-allowed; opacity: .35; }
   z-index: 320;
   width: 620px;
   max-width: calc(100vw - 44px);
+  height: 178px;
+  max-height: calc(100vh - 44px);
   display: grid;
   grid-template-columns: 1fr 148px;
   background: var(--panel);
@@ -1017,25 +1073,29 @@ button:disabled { cursor: not-allowed; opacity: .35; }
 }
 .ai-run-band--narrow { width: 430px; grid-template-columns: 1fr; }
 @keyframes ai-run-band-in { from { opacity: 0; transform: translateY(14px) scale(.98); } }
-.ai-run-band__main { padding: 15px 16px 12px; min-width: 0; }
+.ai-run-band__main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 13px 16px 8px;
+}
 .ai-run-band__kicker {
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: .7px;
   color: var(--muted-foreground);
-  margin-bottom: 9px;
+  margin-bottom: 7px;
 }
-/* The height is fixed, not min/max: prose arrives in bursts of very different
-   length, and letting the box track its content makes the whole band jump on
-   every delta. Four lines at this size is the budget; `column-reverse` keeps the
-   newest line pinned to the bottom edge so overflow scrolls older text out of
-   view upward instead of pushing the live sentence out of sight. */
+/* The band's total height is fixed so neither prose bursts nor a long screen plan
+   can make it jump. This middle row absorbs the available space; `column-reverse`
+   keeps the newest line pinned to the bottom edge while older text clips upward. */
 .ai-run-band__live {
   font-size: 13.5px;
   line-height: 1.6;
   letter-spacing: -.1px;
   color: var(--ink);
-  height: calc(13.5px * 1.6 * 4);
+  min-height: 0;
   display: flex;
   flex-direction: column-reverse;
   justify-content: flex-start;
@@ -1054,12 +1114,13 @@ button:disabled { cursor: not-allowed; opacity: .35; }
 .ai-run-band__meta {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-top: 13px;
-  padding-top: 11px;
+  gap: 7px;
+  min-height: 26px;
+  margin-top: 8px;
+  padding-top: 7px;
   border-top: 1px solid var(--line);
 }
-.ai-run-band__meta small { font-size: 10.5px; color: var(--muted-foreground); }
+.ai-run-band__meta small { font-size: 9.5px; color: var(--muted-foreground); }
 /* One line, ellipsised: a long tool detail must not wrap and grow the footer,
    which would reintroduce the jumping the fixed prose height just removed. */
 .ai-run-band__activity {
@@ -1069,10 +1130,18 @@ button:disabled { cursor: not-allowed; opacity: .35; }
   text-overflow: ellipsis;
 }
 .ai-run-band__meta > :last-child { margin-left: auto; }
+.ai-run-band__cancel {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
 .ai-run-band__spinner {
-  width: 11px;
-  height: 11px;
-  border: 2px solid rgba(124,92,255,.22);
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid rgba(124,92,255,.22);
   border-top-color: #7c5cff;
   border-radius: 50%;
   animation: spin .8s linear infinite;
@@ -1086,6 +1155,8 @@ button:disabled { cursor: not-allowed; opacity: .35; }
   flex-direction: column;
   gap: 9px;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 .ai-run-band__rail b {
   font-size: 9.5px;
@@ -1093,7 +1164,15 @@ button:disabled { cursor: not-allowed; opacity: .35; }
   letter-spacing: .6px;
   color: var(--muted-foreground);
 }
-.ai-run-band__rail-list { display: flex; flex-direction: column; gap: 7px; overflow: hidden; }
+.ai-run-band__rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 0;
+  padding-right: 3px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
 .ai-run-band__screen { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--ink-soft); min-width: 0; }
 .ai-run-band__screen i { width: 15px; height: 24px; border-radius: 3px; background: #e2e0d8; flex: 0 0 auto; }
 .ai-run-band__screen-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

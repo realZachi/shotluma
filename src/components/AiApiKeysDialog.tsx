@@ -50,7 +50,8 @@ export const AiApiKeysDialog = ({
   useEffect(() => {
     if (!open) return
     const frame = window.requestAnimationFrame(() => {
-      const targetId = focusProviderId ?? AI_PROVIDERS[0]?.id
+      const targetId = focusProviderId
+        ?? AI_PROVIDERS.find((provider) => provider.auth === 'apiKey')?.id
       if (!targetId) return
       const node = document.getElementById(`${formId}-${targetId}`)
       if (!(node instanceof HTMLInputElement)) return
@@ -107,7 +108,7 @@ export const AiApiKeysDialog = ({
           </details>
 
           <div className="ai-keys-dialog-fields">
-            {AI_PROVIDERS.map((provider) => {
+            {AI_PROVIDERS.filter((provider) => provider.auth === 'apiKey').map((provider) => {
               const inputId = `${formId}-${provider.id}`
               const hasEnvFallback = envAvailability[provider.id] && !draft[provider.id]
               return (

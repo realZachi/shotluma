@@ -17,8 +17,9 @@ import {
 } from './provider-catalog'
 
 describe('AI provider catalog', () => {
-  it('contains the existing and five new providers with local Vite environment variables', () => {
+  it('contains the ChatGPT connection and API-key providers', () => {
     expect(AI_PROVIDERS.map((provider) => provider.id)).toEqual([
+      'codex',
       'moonshot',
       'google',
       'qwen',
@@ -28,6 +29,7 @@ describe('AI provider catalog', () => {
       'openrouter',
     ])
     expect(AI_PROVIDERS.map((provider) => provider.envVar)).toEqual([
+      '',
       'VITE_MOONSHOT_API_KEY',
       'VITE_GOOGLE_GENERATIVE_AI_API_KEY',
       'VITE_ALIBABA_API_KEY',
@@ -39,6 +41,14 @@ describe('AI provider catalog', () => {
     expect(AI_PROVIDERS.filter((provider) => provider.transport === 'proxy').map(
       (provider) => provider.id,
     )).toEqual(['moonshot'])
+    expect(getAiProvider('codex')).toMatchObject({
+      auth: 'chatgpt',
+      transport: 'bridge',
+    })
+    expect(getAiProvider('codex').models[0]).toMatchObject({
+      id: 'codex/gpt-5.6-terra',
+      providerModelId: 'gpt-5.6-terra',
+    })
     expect(getAiProvider('xai').models[0]?.id).toBe('grok-4.5')
     expect(getAiProvider('anthropic').models.map((model) => model.id)).toEqual([
       'claude-sonnet-5',

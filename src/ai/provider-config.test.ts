@@ -44,6 +44,7 @@ describe('AI provider configuration', () => {
       VITE_XAI_API_KEY: ' xai-key ',
       VITE_OPENROUTER_API_KEY: ' openrouter-key ',
     })).toEqual({
+      codex: '',
       moonshot: 'moonshot-key',
       google: 'google-key',
       qwen: 'qwen-key',
@@ -62,6 +63,7 @@ describe('AI provider configuration', () => {
     })
 
     expect(keys).toEqual({
+      codex: '',
       moonshot: '',
       google: '',
       qwen: '',
@@ -71,6 +73,7 @@ describe('AI provider configuration', () => {
       openrouter: '',
     })
     expect(getAiProviderAvailability(keys)).toEqual({
+      codex: false,
       moonshot: false,
       google: false,
       qwen: false,
@@ -81,8 +84,9 @@ describe('AI provider configuration', () => {
     })
   })
 
-  it('starts with the first configured provider and otherwise falls back to Moonshot', () => {
+  it('starts with the first configured provider and otherwise offers the Codex connection', () => {
     expect(getInitialAiSelection({
+      codex: false,
       moonshot: false,
       google: false,
       qwen: false,
@@ -96,6 +100,7 @@ describe('AI provider configuration', () => {
       reasoningEffort: 'high',
     })
     expect(getInitialAiSelection({
+      codex: false,
       moonshot: false,
       google: false,
       qwen: false,
@@ -109,6 +114,7 @@ describe('AI provider configuration', () => {
       reasoningEffort: 'high',
     })
     expect(getInitialAiSelection({
+      codex: false,
       moonshot: false,
       google: false,
       qwen: false,
@@ -117,11 +123,12 @@ describe('AI provider configuration', () => {
       xai: false,
       openrouter: false,
     })).toEqual({
-      provider: 'moonshot',
-      model: 'kimi-k3',
+      provider: 'codex',
+      model: 'codex/gpt-5.6-terra',
       reasoningEffort: 'high',
     })
     expect(getInitialAiSelection({
+      codex: false,
       moonshot: true,
       google: true,
       qwen: false,
@@ -147,6 +154,7 @@ describe('AI provider configuration', () => {
     }
 
     expect(mergeAiProviderKeys(environment, stored)).toEqual({
+      codex: '',
       moonshot: '',
       google: 'env-google',
       qwen: '',

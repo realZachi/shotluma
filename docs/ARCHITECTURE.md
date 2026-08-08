@@ -14,12 +14,13 @@ Browser
 └── PNG/ZIP export
 
 Optional AI path
+Browser → local Shotluma bridge → Codex App Server → ChatGPT plan
 Browser → AI SDK provider → Google / Qwen / OpenAI / Anthropic / xAI / OpenRouter
 Browser → /api/moonshot/* → Vite proxy → Moonshot API
 Browser → /api/ai-run-logs → Vite → ./ai-logs/*.json (developer opt-in)
 ```
 
-The core editor has no backend requirement. The optional AI path uses bring-your-own keys entered in the browser (`localStorage`), with optional `.env.local` `VITE_*` fallback served only during local development. Production builds replace all provider env values with empty strings. Google, Qwen, OpenAI, Anthropic, xAI, and OpenRouter are called directly; Moonshot is enabled only on localhost and uses a same-origin proxy because its API does not support the required browser CORS flow.
+The core editor has no backend requirement. Hosted users can connect a Codex app or CLI already signed in with ChatGPT on the same computer; `app.shotluma.com` remains the application host. The browser talks to a paired loopback bridge, and the bridge talks to Codex App Server over stdio. The alternative AI path uses bring-your-own keys entered in the browser (`localStorage`), with optional `.env.local` `VITE_*` fallback served only during local development. Production builds replace all provider env values with empty strings. Google, Qwen, OpenAI, Anthropic, xAI, and OpenRouter are called directly; Moonshot is enabled only on localhost and uses a same-origin proxy because its API does not support the required browser CORS flow.
 
 This public repository contains and deploys only the editor at
 `app.shotluma.com`. The marketing site at `shotluma.com` has a separate private
@@ -115,6 +116,9 @@ The AI feature is split into explicit layers:
 | File | Responsibility |
 | --- | --- |
 | `src/ai/runner.ts` | Provider client, stream handling, and UI events |
+| `src/ai/codex-app-server.ts` | Codex account verification, dynamic tools, and turn lifecycle |
+| `src/ai/codex-bridge-client.ts` | Paired loopback HTTP transport and App Server RPC correlation |
+| `src/ai/codex-connection.ts` | Browser pairing state and generated Codex setup prompt |
 | `src/ai/prompt.ts` | Design rules and coordinate semantics |
 | `src/ai/prompt-caching.ts` | Per-provider cache routing (Anthropic breakpoints, OpenAI cache keys) |
 | `src/ai/tools.ts` | Tool composition and generate/edit tool boundary |
@@ -133,6 +137,8 @@ The AI feature is split into explicit layers:
 | `src/ai/run-log.ts` | Versioned, privacy-bounded AI run log schema |
 | `src/ai/run-log-client.ts` | Env-gated delivery to the local log endpoint |
 | `scripts/ai-run-log-plugin.ts` | Validated, project-local JSON file writer |
+| `scripts/shotluma-codex-bridge.ts` | Restricted loopback bridge to Codex App Server |
+| `scripts/codex-bridge-asset-plugin.ts` | Emits the standalone connector as a public build asset |
 
 The model does not receive unrestricted application access. It can only use the tools supplied by `createEditorTools`, and the controller applies per-element field whitelists.
 
@@ -142,7 +148,11 @@ Rich text is built from structured highlight input. The model never writes raw H
 
 The generate dialog covers input only. Once a run starts it closes and `src/components/AiRunBand.tsx` takes over as a band floating over the canvas: assistant prose and reasoning at reading size (accumulated per sentence by `src/ai/run-narration.ts`), a screen rail fed by the model's `declare_plan` call and reconciled against reality by `src/ai/run-plan.ts`, and an action count in place of a tool log. The band is also where a finished or failed run reports its result, so no run hands control back to the centered dialog.
 
-`src/ai/provider-catalog.ts` owns the selectable providers, models, transport metadata, and model-specific reasoning-effort choices. `src/ai/provider-config.ts` resolves keys from browser `localStorage` (API keys dialog) with optional `.env.local` `VITE_*` fallback, and `src/ai/runner.ts` lazily loads the selected native AI SDK provider. The runner passes portable efforts through the AI SDK's standardized `reasoning` option so each native provider can map it to its own API; OpenAI GPT-5.6 and Moonshot/Kimi K3 `max` go through OpenAI-compat `providerOptions` because the shared option has no `max`. The generate modal presents one model picker grouped by provider, with reasoning effort as secondary chips when the model supports it, plus an API keys dialog when a provider is unconfigured. Requests go directly from the local browser to Google, Alibaba/Qwen, OpenAI, Anthropic, xAI, or OpenRouter. Moonshot uses the OpenAI chat provider through the only Vite proxy route.
+`src/ai/provider-catalog.ts` owns the selectable providers, models, transport metadata, and model-specific reasoning-effort choices. `src/ai/provider-config.ts` resolves keys from browser `localStorage` (API keys dialog) with optional `.env.local` `VITE_*` fallback, and `src/ai/runner.ts` routes either to the Codex bridge or a lazily loaded native AI SDK provider. The runner passes portable efforts through the AI SDK's standardized `reasoning` option so each native provider can map it to its own API; OpenAI GPT-5.6 and Moonshot/Kimi K3 `max` go through OpenAI-compat `providerOptions` because the shared option has no `max`. The generate modal presents one model picker grouped by provider, with reasoning effort as secondary chips when the model supports it, a Codex connection tutorial, and an API keys dialog for key-based providers. Requests go directly from the local browser to Google, Alibaba/Qwen, OpenAI, Anthropic, xAI, or OpenRouter. Moonshot uses the OpenAI chat provider through the only Vite proxy route.
+
+Codex pairing is deliberately not OAuth inside Shotluma. The setup prompt downloads the connector asset emitted with the hosted app, asks Codex to inspect it, and starts it as a detached user process. The browser stores a random pairing token and the exact app origin. The connector binds only `127.0.0.1:47447`, stores its matching configuration with user-only permissions, requires both the exact `Origin` header and bearer pairing token, and never reads Codex authentication files. It starts `codex app-server` over stdio and allowlists only account/rate-limit/model reads plus ephemeral thread and turn methods. Thread and turn requests are overwritten to use an empty read-only workspace, no approvals, and no network. The model can change the canvas only through the same `createEditorTools` dynamic tools used by direct providers.
+
+The bridge uses Codex App Server's experimental dynamic-tool API. Keep bridge and web-client versions compatible, fail closed on unknown RPC methods, and retain the API-key provider path as a fallback while this integration is experimental.
 
 OpenRouter is the one provider with a runtime model catalog: `src/ai/openrouter-models.ts` fetches the public OpenRouter `/models` endpoint (no key required), keeps only models that accept image input and support tool calling, caches the result in `localStorage` for an hour, and registers it with the static catalog so selections resolve everywhere. The curated OpenRouter shortlist in `provider-catalog.ts` doubles as the offline fallback, and the model picker adds a searchable browser over the fetched catalog. Requests use the OpenAI chat provider against `https://openrouter.ai/api/v1`.
 
