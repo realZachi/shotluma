@@ -134,12 +134,12 @@ export const useCodexConnection = () => {
   }, [])
 
   useEffect(() => {
-    if (view.status !== 'checking') return
+    if (!readCodexConnection()) return
     const timeout = window.setTimeout(() => {
       void checkConnection()
     }, 0)
     return () => window.clearTimeout(timeout)
-  }, [checkConnection, view.status])
+  }, [checkConnection])
 
   return {
     view,

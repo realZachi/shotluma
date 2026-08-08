@@ -53,6 +53,21 @@ describe('Shotluma Codex Bridge', () => {
       authorization: `Bearer ${'B'.repeat(43)}`,
       config,
     })).toBe(false)
+    expect(isAuthorizedBridgeRequest({
+      requestOrigin: undefined,
+      authorization: `Bearer ${token}`,
+      config,
+    })).toBe(false)
+    expect(isAuthorizedBridgeRequest({
+      requestOrigin: 'https://app.shotluma.com',
+      authorization: undefined,
+      config,
+    })).toBe(false)
+    expect(isAuthorizedBridgeRequest({
+      requestOrigin: 'https://app.shotluma.com',
+      authorization: `Basic ${token}`,
+      config,
+    })).toBe(false)
   })
 
   it('allows only the minimal RPC surface and forces a non-writing sandbox', () => {
@@ -86,5 +101,11 @@ describe('Shotluma Codex Bridge', () => {
       id: 'server-request',
       result: { success: true },
     })
+    expect(restrictRpcMessage({
+      id: 'unknown',
+      method: 'thread/notARealMethod',
+      params: {},
+    })).toBeNull()
+    expect(restrictRpcMessage({ method: 'account/read', params: {} })).toBeNull()
   })
 })

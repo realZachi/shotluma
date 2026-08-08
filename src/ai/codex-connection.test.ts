@@ -76,6 +76,9 @@ describe('Codex connection setup', () => {
     expect(prompt).toContain('https://app.shotluma.com/codex/shotluma-codex-bridge.mjs')
     expect(prompt).toContain('without sudo')
     expect(prompt).toContain('never reads `~/.codex/auth.json`')
+    expect(prompt).toContain('`<RUNTIME>`')
+    expect(prompt).toContain('<RUNTIME> ~/.local/share/shotluma/shotluma-codex-bridge.mjs')
+    expect(prompt).not.toContain('`node ~/.local/share/shotluma/shotluma-codex-bridge.mjs')
     expect(prompt).not.toContain('OPENAI_API_KEY')
   })
 

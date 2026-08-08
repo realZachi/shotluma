@@ -8,5 +8,8 @@ describe('Codex bridge asset', () => {
     expect(source).toContain('from "node:child_process"')
     expect(source).not.toContain('export type BridgeCommand')
     expect(source).not.toContain(': BridgeConfig')
+    const imports = [...source.matchAll(/from "([^"]+)"/g)].map((match) => match[1])
+    expect(imports.length).toBeGreaterThan(0)
+    expect(imports.every((specifier) => specifier?.startsWith('node:'))).toBe(true)
   })
 })

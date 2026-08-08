@@ -66,7 +66,7 @@ The recommended hosted flow uses your ChatGPT plan and needs no API key:
 3. Let Codex download and inspect Shotluma's small local connector. Return to the browser and click **Check connection**.
 4. Keep using the hosted editor normally. You do not clone, build, or self-host Shotluma.
 
-The connector listens only on `127.0.0.1`, accepts the exact paired Shotluma origin and a random browser pairing token, and delegates authentication to Codex App Server. It does not read or copy ChatGPT tokens. Codex must already be installed and signed in with ChatGPT on that computer. Stop it with `node ~/.local/share/shotluma/shotluma-codex-bridge.mjs stop`.
+The connector listens only on `127.0.0.1`, accepts the exact paired Shotluma origin and a random browser pairing token, and delegates authentication to Codex App Server. It does not read or copy ChatGPT tokens. Codex must already be installed and signed in with ChatGPT on that computer. Stop it with the same runtime used during setup: `node ~/.local/share/shotluma/shotluma-codex-bridge.mjs stop` or `bun ~/.local/share/shotluma/shotluma-codex-bridge.mjs stop`.
 
 Alternatively, enter a provider key in the generation dialog (**API keys** / **Enter API key**). Keys are stored unencrypted in this browser's `localStorage`. Use dedicated keys with restrictive quotas, and remove them before sharing the browser profile or device.
 

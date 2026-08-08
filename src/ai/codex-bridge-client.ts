@@ -3,6 +3,8 @@ import {
   type CodexConnection,
 } from './codex-connection'
 
+export const CODEX_BRIDGE_VERSION = 1
+
 export type CodexBridgeStatus = {
   bridgeVersion: number
   appServerReady: boolean
@@ -42,6 +44,11 @@ const parseStatus = (value: unknown): CodexBridgeStatus => {
     || typeof appServer['sequence'] !== 'number'
     || (appServer['error'] !== null && typeof appServer['error'] !== 'string')
   ) throw new Error('The Shotluma Codex Bridge returned an invalid App Server status')
+  if (value['bridgeVersion'] !== CODEX_BRIDGE_VERSION) {
+    throw new Error(
+      `Shotluma Codex Bridge version ${String(value['bridgeVersion'])} is incompatible; run the setup prompt again`,
+    )
+  }
   return {
     bridgeVersion: value['bridgeVersion'],
     appServerReady: appServer['ready'],
@@ -80,9 +87,14 @@ export const probeCodexBridge = async (options: {
 const parseEventBatch = (value: unknown): {
   events: { sequence: number; message: CodexRpcMessage }[]
   sequence: number
+  droppedThrough: number
 } => {
   if (!isObject(value) || !Array.isArray(value['events']) || typeof value['sequence'] !== 'number') {
     throw new Error('The Shotluma Codex Bridge returned an invalid event batch')
+  }
+  const droppedThrough = value['droppedThrough'] ?? 0
+  if (!Number.isSafeInteger(droppedThrough) || Number(droppedThrough) < 0) {
+    throw new Error('The Shotluma Codex Bridge returned an invalid event range')
   }
   const events: { sequence: number; message: CodexRpcMessage }[] = []
   for (const item of value['events']) {
@@ -91,7 +103,7 @@ const parseEventBatch = (value: unknown): {
     }
     events.push({ sequence: item['sequence'], message: item['message'] })
   }
-  return { events, sequence: value['sequence'] }
+  return { events, sequence: value['sequence'], droppedThrough: Number(droppedThrough) }
 }
 
 const rpcError = (value: unknown): Error => {
@@ -106,6 +118,7 @@ export class CodexBridgeClient {
   private afterSequence = 0
   private isClosed = false
   private pollController: AbortController | null = null
+  private failure: Error | null = null
   private pendingRequests = new Map<string, PendingRequest>()
   private listeners = new Set<CodexBridgeMessageListener>()
 
@@ -115,7 +128,7 @@ export class CodexBridgeClient {
   ) {}
 
   async connect(signal?: AbortSignal): Promise<CodexBridgeStatus> {
-    if (this.isClosed) throw new Error('The Shotluma Codex Bridge connection is closed')
+    this.assertAvailable()
     const status = await probeCodexBridge({
       connection: this.connection,
       fetcher: this.fetcher,
@@ -132,16 +145,13 @@ export class CodexBridgeClient {
   }
 
   async request(method: string, params: unknown, signal?: AbortSignal): Promise<unknown> {
-    if (this.isClosed) throw new Error('The Shotluma Codex Bridge connection is closed')
+    this.assertAvailable()
+    if (signal?.aborted) throw new DOMException('The Codex request was cancelled', 'AbortError')
     const id = `shotluma-${crypto.randomUUID()}`
     const result = new Promise<unknown>((resolve, reject) => {
       const handleAbort = () => {
         this.pendingRequests.delete(id)
         reject(new DOMException('The Codex request was cancelled', 'AbortError'))
-      }
-      if (signal?.aborted) {
-        handleAbort()
-        return
       }
       signal?.addEventListener('abort', handleAbort, { once: true })
       this.pendingRequests.set(id, {
@@ -151,14 +161,17 @@ export class CodexBridgeClient {
       })
     })
     try {
-      await this.postMessage({ id, method, params }, signal)
+      const [, value] = await Promise.all([
+        this.postMessage({ id, method, params }, signal),
+        result,
+      ])
+      return value
     } catch (error) {
       const pending = this.pendingRequests.get(id)
       pending?.cleanup()
       this.pendingRequests.delete(id)
       throw error
     }
-    return result
   }
 
   async respond(id: string | number, result: unknown): Promise<void> {
@@ -179,6 +192,7 @@ export class CodexBridgeClient {
   }
 
   private async postMessage(message: CodexRpcMessage, signal?: AbortSignal) {
+    this.assertAvailable()
     const response = await this.fetcher(`${CODEX_BRIDGE_ORIGIN}/v1/rpc`, {
       method: 'POST',
       headers: {
@@ -213,18 +227,27 @@ export class CodexBridgeClient {
         )
         if (!response.ok) throw await responseError(response)
         const batch = parseEventBatch(await response.json())
+        if (this.afterSequence < batch.droppedThrough) {
+          throw new Error('The Shotluma Codex Bridge event buffer overflowed; retry the generation')
+        }
         this.afterSequence = batch.sequence
         for (const event of batch.events) this.dispatch(event.message)
       }
     } catch (error) {
       if (signal.aborted || this.isClosed) return
       const failure = error instanceof Error ? error : new Error(String(error))
+      this.failure = failure
       for (const pending of this.pendingRequests.values()) {
         pending.cleanup()
         pending.reject(failure)
       }
       this.pendingRequests.clear()
     }
+  }
+
+  private assertAvailable() {
+    if (this.isClosed) throw new Error('The Shotluma Codex Bridge connection is closed')
+    if (this.failure) throw this.failure
   }
 
   private dispatch(message: CodexRpcMessage) {

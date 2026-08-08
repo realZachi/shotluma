@@ -175,12 +175,14 @@ const serializeToolFailure = (error: unknown) => ({
   }],
 })
 
-const executeDynamicTool = async (options: {
+export const executeCodexDynamicTool = async (options: {
   request: DynamicToolRequest
   tools: ToolSet
   signal?: AbortSignal
 }) => {
-  const tool = options.tools[options.request.toolName]
+  const tool = Object.hasOwn(options.tools, options.request.toolName)
+    ? options.tools[options.request.toolName]
+    : undefined
   if (!tool?.execute) {
     return serializeToolFailure(new Error(`Unknown Shotluma tool: ${options.request.toolName}`))
   }
@@ -191,7 +193,22 @@ const executeDynamicTool = async (options: {
     ...(options.signal ? { abortSignal: options.signal } : {}),
   }
   try {
-    const output: unknown = await tool.execute(options.request.arguments, executionOptions)
+    if (!('inputSchema' in tool)) {
+      return serializeToolFailure(new Error(`Shotluma tool has no input schema: ${options.request.toolName}`))
+    }
+    const schema = asSchema(tool.inputSchema)
+    if (!schema.validate) {
+      return serializeToolFailure(
+        new Error(`Shotluma tool cannot validate input: ${options.request.toolName}`),
+      )
+    }
+    const validation = await schema.validate(options.request.arguments)
+    if (!validation.success) {
+      return serializeToolFailure(
+        new Error(`Invalid input for Shotluma tool ${options.request.toolName}: ${validation.error.message}`),
+      )
+    }
+    const output: unknown = await tool.execute(validation.value, executionOptions)
     if (output && typeof output === 'object' && Symbol.asyncIterator in output) {
       return serializeToolFailure(new Error('Streaming Shotluma tool results are not supported'))
     }
@@ -314,8 +331,30 @@ const completedTurnError = (message: CodexRpcMessage): string | null => {
 }
 
 const createAbortError = () => new DOMException('The Codex run was cancelled', 'AbortError')
+const THREAD_CLEANUP_TIMEOUT_MS = 1_500
 
-export const runCodexAppServerGeneration = async (options: {
+const deleteCodexThread = async (client: CodexRpcClient, threadId: string): Promise<void> => {
+  const cleanupController = new AbortController()
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<void>((resolve) => {
+    timeoutId = setTimeout(() => {
+      cleanupController.abort()
+      resolve()
+    }, THREAD_CLEANUP_TIMEOUT_MS)
+  })
+  const deletion = client.request(
+    'thread/delete',
+    { threadId },
+    cleanupController.signal,
+  ).then(() => undefined, () => undefined)
+  try {
+    await Promise.race([deletion, timeout])
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
+}
+
+type CodexGenerationOptions = {
   connection: CodexConnection
   selection: AiModelSelection
   description: string
@@ -324,25 +363,36 @@ export const runCodexAppServerGeneration = async (options: {
   logo?: PreparedAsset
   controller: AiEditorController
   targetSlideId?: string
+  enableOverlayAssets?: boolean
   signal?: AbortSignal
   onEvent: (event: AiRunEvent) => void
   onActivity?: (activity: AiToolActivity) => void
   client?: CodexRpcClient
-}): Promise<void> => {
-  if (options.signal?.aborted) throw createAbortError()
-  const client = options.client ?? new CodexBridgeClient(options.connection)
-  const runController = options.targetSlideId
+}
+
+const createCodexRunTools = (options: CodexGenerationOptions) => {
+  const controller = options.targetSlideId
     ? scopeAiControllerToSlide(options.controller, options.targetSlideId)
     : options.controller
-  const tools = createEditorTools(runController, {
+  return createEditorTools(controller, {
     mode: options.targetSlideId ? 'edit' : 'generate',
     ...(options.onActivity ? { onActivity: options.onActivity } : {}),
+    ...(options.enableOverlayAssets ? { enableOverlayAssets: true } : {}),
     ...(options.signal ? { abortSignal: options.signal } : {}),
   })
+}
+
+export const runCodexAppServerGeneration = async (
+  options: CodexGenerationOptions,
+): Promise<void> => {
+  if (options.signal?.aborted) throw createAbortError()
+  const client = options.client ?? new CodexBridgeClient(options.connection)
+  const tools = createCodexRunTools(options)
   let threadId = ''
   let turnId = ''
   let assistantOutput = ''
   let slidesCreated = 0
+  let queuedMessages: CodexRpcMessage[] = []
   let settleTurn: ((error?: Error) => void) | null = null
   const turnCompleted = new Promise<void>((resolve, reject) => {
     settleTurn = (error) => error ? reject(error) : resolve()
@@ -367,7 +417,7 @@ export const runCodexAppServerGeneration = async (options: {
       name: request.toolName,
       detail: describeAiToolCall(request.toolName, request.arguments),
     })
-    const result = await executeDynamicTool({
+    const result = await executeCodexDynamicTool({
       request,
       tools,
       ...(options.signal ? { signal: options.signal } : {}),
@@ -375,7 +425,7 @@ export const runCodexAppServerGeneration = async (options: {
     await client.respond(request.requestId, result)
   }
 
-  const unsubscribe = client.subscribe((message) => {
+  const handleMessage = (message: CodexRpcMessage) => {
     const toolRequest = parseDynamicToolRequest(message)
     if (toolRequest) {
       void handleToolRequest(toolRequest).catch((error: unknown) => {
@@ -395,7 +445,23 @@ export const runCodexAppServerGeneration = async (options: {
     if (message['method'] !== 'turn/completed') return
     const error = completedTurnError(message)
     settleTurn?.(error ? new Error(error) : undefined)
+  }
+
+  const unsubscribe = client.subscribe((message) => {
+    if (!threadId || !turnId) {
+      queuedMessages.push(message)
+      return
+    }
+    handleMessage(message)
   })
+
+  const handleAbort = () => {
+    if (!threadId || !turnId) return
+    void client.request('turn/interrupt', { threadId, turnId }).catch(() => undefined)
+    settleTurn?.(createAbortError())
+  }
+  options.signal?.addEventListener('abort', handleAbort, { once: true })
+  if (options.signal?.aborted) handleAbort()
 
   try {
     const bridgeStatus = await client.connect(options.signal)
@@ -425,6 +491,7 @@ export const runCodexAppServerGeneration = async (options: {
       ephemeral: true,
       baseInstructions: buildInstructions({
         ...(options.targetSlideId ? { targetSlideId: options.targetSlideId } : {}),
+        ...(options.enableOverlayAssets ? { enableOverlayAssets: true } : {}),
       }),
       developerInstructions: 'You are embedded in Shotluma. Use only the provided Shotluma dynamic tools. Never use shell, filesystem, network, MCP, skills, plugins, or subagents.',
       dynamicTools: await createCodexDynamicToolSpecs(tools),
@@ -445,26 +512,22 @@ export const runCodexAppServerGeneration = async (options: {
       summary: 'detailed',
     }, options.signal)
     turnId = readTurnId(turnResult)
-
-    const handleAbort = () => {
-      void client.request('turn/interrupt', { threadId, turnId }).catch(() => undefined)
-      settleTurn?.(createAbortError())
-    }
-    options.signal?.addEventListener('abort', handleAbort, { once: true })
-    try {
-      await turnCompleted
-    } finally {
-      options.signal?.removeEventListener('abort', handleAbort)
-    }
+    const bufferedMessages = queuedMessages
+    queuedMessages = []
+    for (const message of bufferedMessages) handleMessage(message)
+    if (options.signal?.aborted) handleAbort()
+    await turnCompleted
     options.onEvent({
       type: 'done',
       summary: assistantOutput.trim(),
       slidesCreated,
     })
   } finally {
+    options.signal?.removeEventListener('abort', handleAbort)
     unsubscribe()
+    queuedMessages = []
     if (threadId) {
-      await client.request('thread/delete', { threadId }).catch(() => undefined)
+      await deleteCodexThread(client, threadId)
     }
     client.close()
   }

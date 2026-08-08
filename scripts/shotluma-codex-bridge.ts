@@ -242,6 +242,7 @@ class AppServerPipe {
   private child: ChildProcessWithoutNullStreams
   private events: BridgeEvent[] = []
   private nextSequence = 1
+  private droppedThrough = 0
   private waiters = new Set<() => void>()
   private initializationError: string | null = null
   private isInitialized = false
@@ -260,10 +261,15 @@ class AppServerPipe {
       this.isInitialized = false
       this.wakeWaiters()
     })
+    this.child.stdin.on('error', (error) => {
+      this.initializationError = `Codex App Server input failed: ${error.message}`
+      this.isInitialized = false
+      this.wakeWaiters()
+    })
     this.child.stderr.resume()
     const lines = createInterface({ input: this.child.stdout })
     lines.on('line', (line) => this.handleLine(line))
-    this.send({
+    this.write({
       id: BRIDGE_INITIALIZE_ID,
       method: 'initialize',
       params: {
@@ -286,14 +292,20 @@ class AppServerPipe {
   }
 
   send(message: JsonRpcMessage) {
-    this.child.stdin.write(`${JSON.stringify(message)}\n`)
+    if (!this.isInitialized) {
+      throw new Error(this.initializationError ?? 'Codex App Server is not ready')
+    }
+    this.write(message)
   }
 
-  async readEvents(after: number): Promise<{ events: BridgeEvent[]; sequence: number }> {
+  async readEvents(after: number): Promise<{
+    events: BridgeEvent[]
+    sequence: number
+    droppedThrough: number
+  }> {
     const available = this.events.filter((event) => event.sequence > after)
-    if (available.length > 0 || this.initializationError) {
-      return { events: available, sequence: this.nextSequence - 1 }
-    }
+    if (available.length > 0) return this.eventBatch(after)
+    if (this.initializationError) throw new Error(this.initializationError)
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
         this.waiters.delete(done)
@@ -306,10 +318,9 @@ class AppServerPipe {
       }
       this.waiters.add(done)
     })
-    return {
-      events: this.events.filter((event) => event.sequence > after),
-      sequence: this.nextSequence - 1,
-    }
+    const nextAvailable = this.events.some((event) => event.sequence > after)
+    if (!nextAvailable && this.initializationError) throw new Error(this.initializationError)
+    return this.eventBatch(after)
   }
 
   stop() {
@@ -330,15 +341,40 @@ class AppServerPipe {
         this.wakeWaiters()
         return
       }
-      this.isInitialized = true
-      this.send({ method: 'initialized', params: {} })
+      try {
+        this.write({ method: 'initialized', params: {} })
+        this.isInitialized = true
+      } catch (error) {
+        this.initializationError = error instanceof Error
+          ? error.message
+          : 'Codex App Server input is unavailable'
+        this.isInitialized = false
+      }
       this.wakeWaiters()
       return
     }
     this.events.push({ sequence: this.nextSequence, message })
     this.nextSequence += 1
-    if (this.events.length > MAX_EVENT_COUNT) this.events.shift()
+    while (this.events.length > MAX_EVENT_COUNT) {
+      const dropped = this.events.shift()
+      if (dropped) this.droppedThrough = dropped.sequence
+    }
     this.wakeWaiters()
+  }
+
+  private write(message: JsonRpcMessage) {
+    if (this.child.stdin.destroyed || !this.child.stdin.writable) {
+      throw new Error(this.initializationError ?? 'Codex App Server input is unavailable')
+    }
+    this.child.stdin.write(`${JSON.stringify(message)}\n`)
+  }
+
+  private eventBatch(after: number) {
+    return {
+      events: this.events.filter((event) => event.sequence > after),
+      sequence: this.nextSequence - 1,
+      droppedThrough: this.droppedThrough,
+    }
   }
 
   private wakeWaiters() {
@@ -402,7 +438,7 @@ const handleRpcRequest = async (options: BridgeRequestContext, headers: Record<s
     writeJson(response, 202, { accepted: true }, headers)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid RPC body'
-    writeJson(response, 400, { error: message }, headers)
+    writeJson(response, appServer.getStatus().ready ? 400 : 503, { error: message }, headers)
   }
 }
 
@@ -421,7 +457,12 @@ const handleAuthorizedRequest = async (
   if (requestUrl.pathname === '/v1/events' && request.method === 'GET') {
     const afterValue = Number(requestUrl.searchParams.get('after') ?? 0)
     const after = Number.isSafeInteger(afterValue) && afterValue >= 0 ? afterValue : 0
-    writeJson(response, 200, await appServer.readEvents(after), headers)
+    try {
+      writeJson(response, 200, await appServer.readEvents(after), headers)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Codex App Server is unavailable'
+      writeJson(response, 503, { error: message }, headers)
+    }
     return
   }
   if (requestUrl.pathname === '/v1/rpc' && request.method === 'POST') {
@@ -481,10 +522,29 @@ const startHttpBridge = async () => {
     }).catch((error: unknown) => {
       if (response.headersSent) return
       const message = error instanceof Error ? error.message : 'Bridge request failed'
-      writeJson(response, 500, { error: message })
+      console.error(`Shotluma Codex Bridge request failed: ${message}`)
+      writeJson(response, 500, { error: 'Bridge request failed' })
     })
   })
-  server.listen(BRIDGE_PORT, BRIDGE_HOST)
+  await new Promise<void>((resolve, reject) => {
+    const handleListenError = (error: NodeJS.ErrnoException) => {
+      appServer.stop()
+      const reason = error.code === 'EADDRINUSE'
+        ? `Port ${BRIDGE_PORT} is already in use`
+        : error.message
+      reject(new Error(reason))
+    }
+    server.once('error', handleListenError)
+    server.listen(BRIDGE_PORT, BRIDGE_HOST, () => {
+      server.off('error', handleListenError)
+      resolve()
+    })
+  })
+  server.on('error', (error) => {
+    appServer.stop()
+    console.error(`Shotluma Codex Bridge server failed: ${error.message}`)
+    process.exitCode = 1
+  })
 }
 
 const controlRequest = async (pathName: string, controlSecret: string): Promise<boolean> => {

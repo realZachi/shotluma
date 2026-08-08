@@ -57,11 +57,6 @@ export const CodexConnectionDialog = ({
     }
   }
 
-  const openInChatGpt = () => {
-    if (!desktopDeepLink) return
-    window.location.href = desktopDeepLink
-  }
-
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="codex-connect-dialog">
@@ -112,7 +107,13 @@ export const CodexConnectionDialog = ({
                           <Button
                             type="button"
                             className="codex-connect-primary"
-                            onClick={openInChatGpt}
+                            render={(
+                              <a
+                                href={desktopDeepLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              />
+                            )}
                           >
                             <ChatGpt size={15} />
                             Open in ChatGPT

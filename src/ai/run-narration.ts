@@ -133,11 +133,13 @@ export const finishNarrationSegment = (
   source: NarrationSource,
 ): NarrationState => state.pendingSource === source ? flushNarration(state) : state
 
+const MARKDOWN_EMPHASIS = /(^|[\s([{"'“‘])(\*\*|__|~~|[*_`])(?=\S)([\s\S]*?\S)\2(?=$|[\s)\]}"'”’.,!?;:])/g
+
 /** The run band is plain text even when a provider formats its summaries as Markdown. */
 export const toPlainNarrationText = (value: string): string => value
   .replace(/\[([^\]]+)]\([^)]+\)/g, '$1')
   .replace(/(^|\n)\s{0,3}(?:#{1,6}|[-+])\s+/g, '$1')
-  .replace(/[*_~`]+/g, '')
+  .replace(MARKDOWN_EMPHASIS, '$1$3')
   .replace(/\s+/g, ' ')
   .trim()
 

@@ -1,11 +1,12 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { transformWithOxc, type Plugin } from 'vite'
 
 export const CODEX_BRIDGE_ASSET_PATH = '/codex/shotluma-codex-bridge.mjs'
 
 const bridgeSourcePath = path.resolve(
-  import.meta.dirname,
+  path.dirname(fileURLToPath(import.meta.url)),
   'shotluma-codex-bridge.ts',
 )
 
@@ -35,8 +36,9 @@ export const createCodexBridgeAssetPlugin = (): Plugin => ({
         response.end(source)
       }).catch((error: unknown) => {
         const message = error instanceof Error ? error.message : 'Bridge build failed'
+        console.error(`Unable to build the Shotluma Codex Bridge asset: ${message}`)
         response.statusCode = 500
-        response.end(message)
+        response.end('Bridge build failed')
       })
     })
   },

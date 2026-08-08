@@ -160,11 +160,11 @@ Pairing token: ${connection.pairingToken}
 Official bridge source: ${bridgeSource}
 
 Please do the following:
-1. Confirm that \`codex\` is available and that either \`node\` or \`bun\` is available. Prefer Node when both exist. If neither runtime exists, explain that requirement and stop instead of installing one silently.
+1. Confirm that \`codex\` is available and choose an installed JavaScript runtime: use \`node\` when available, otherwise use \`bun\`. Store that command as \`<RUNTIME>\`. If neither runtime exists, explain that requirement and stop instead of installing one silently.
 2. ${downloadInstruction}
 3. Read the downloaded file before running it. Confirm that it binds only to 127.0.0.1, never reads \`~/.codex/auth.json\`, and starts \`codex app-server\` over stdio.
-4. Run this command with the available runtime, substituting the exact values above without printing the pairing token again:
-   \`node ~/.local/share/shotluma/shotluma-codex-bridge.mjs start --pairing-token <PAIRING_TOKEN> --allowed-origin <SHOTLUMA_ORIGIN>\`
+4. Run this command with the selected runtime, substituting \`<RUNTIME>\` and the exact values above without printing the pairing token again:
+   \`<RUNTIME> ~/.local/share/shotluma/shotluma-codex-bridge.mjs start --pairing-token <PAIRING_TOKEN> --allowed-origin <SHOTLUMA_ORIGIN>\`
 5. The command must run without sudo, store its configuration with user-only permissions, and start the bridge as a detached user process.
 6. Verify \`http://127.0.0.1:${CODEX_BRIDGE_PORT}/readyz\` returns ready, then tell me to return to Shotluma and click “Check connection”.
 

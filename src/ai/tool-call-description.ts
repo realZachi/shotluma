@@ -3,22 +3,22 @@ import { parsePlanInput } from './run-plan'
 const truncate = (value: string, max: number) =>
   value.length > max ? `${value.slice(0, max)}…` : value
 
-const STATIC_TOOL_DETAILS: Record<string, string> = {
-  get_canvas_state: 'Canvas state retrieved',
-  add_slide: 'New screen created',
-  set_slide_background: 'Background updated',
-  delete_slide: 'Screen deleted',
-  add_image: 'Image added',
-  set_device_screenshot: 'Device screenshot replaced',
-  update_element: 'Element updated',
-  delete_element: 'Element deleted',
-  inspect_slide: 'Layout measured',
-  render_slide_preview: 'Preview checked',
-  remove_asset_background: 'Overlay background removed',
-}
+const STATIC_TOOL_DETAILS = new Map<string, string>([
+  ['get_canvas_state', 'Canvas state retrieved'],
+  ['add_slide', 'New screen created'],
+  ['set_slide_background', 'Background updated'],
+  ['delete_slide', 'Screen deleted'],
+  ['add_image', 'Image added'],
+  ['set_device_screenshot', 'Device screenshot replaced'],
+  ['update_element', 'Element updated'],
+  ['delete_element', 'Element deleted'],
+  ['inspect_slide', 'Layout measured'],
+  ['render_slide_preview', 'Preview checked'],
+  ['remove_asset_background', 'Overlay background removed'],
+])
 
 export const describeAiToolCall = (toolName: string, input: unknown): string => {
-  const staticDetail = STATIC_TOOL_DETAILS[toolName]
+  const staticDetail = STATIC_TOOL_DETAILS.get(toolName)
   if (staticDetail !== undefined) return staticDetail
 
   const data = input && typeof input === 'object' && !Array.isArray(input)

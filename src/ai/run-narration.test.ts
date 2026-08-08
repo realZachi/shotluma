@@ -89,9 +89,20 @@ describe('appendNarrationDelta', () => {
     ])
   })
 
+  it('does not finish a segment from another narration source', () => {
+    const state = stream([['reasoning', 'Still reasoning']])
+
+    expect(finishNarrationSegment(state, 'text')).toBe(state)
+  })
+
   it('renders provider Markdown as compact plain narration', () => {
     expect(toPlainNarrationText('### **Planning**\n- [Six screens](https://example.com)'))
       .toBe('Planning Six screens')
+  })
+
+  it('preserves punctuation inside identifiers while removing paired emphasis', () => {
+    expect(toPlainNarrationText('Using snake_case, --color_primary, and **bold text**.'))
+      .toBe('Using snake_case, --color_primary, and bold text.')
   })
 })
 

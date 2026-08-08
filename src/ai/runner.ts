@@ -332,6 +332,7 @@ const runCodexProviderGeneration = async (options: {
   logo?: PreparedAsset
   controller: AiEditorController
   targetSlideId?: string
+  enableOverlayAssets?: boolean
   signal?: AbortSignal
   runStartedAt: number
   accumulator: AiRunAccumulator
@@ -351,6 +352,7 @@ const runCodexProviderGeneration = async (options: {
     ...(options.logo ? { logo: options.logo } : {}),
     controller: options.controller,
     ...(options.targetSlideId ? { targetSlideId: options.targetSlideId } : {}),
+    ...(options.enableOverlayAssets ? { enableOverlayAssets: true } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
     onEvent: (event) => collectCodexEvent({
       event,
@@ -543,6 +545,7 @@ export async function runAiGeneration(options: {
         ...(logo ? { logo } : {}),
         controller,
         ...(targetSlideId ? { targetSlideId } : {}),
+        ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
         ...(signal ? { signal } : {}),
         runStartedAt,
         accumulator,
