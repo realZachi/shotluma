@@ -22,6 +22,7 @@
     "typecheck": "tsc -b",
     "build": "bun run typecheck && vite build",
     "deploy": "bun run build && wrangler deploy",
+    "deploy-only": "wrangler deploy",
     "preview": "vite preview",
     "structure": "bun scripts/check-structure.ts",
     "lint": "eslint . --max-warnings 0",
