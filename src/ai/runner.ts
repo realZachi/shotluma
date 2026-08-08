@@ -473,6 +473,11 @@ const runDirectProviderGeneration = async (options: {
   return 'completed'
 }
 
+/**
+ * Runs an AI generation request and records its outcome.
+ *
+ * @param options - Generation settings, editor controller, optional assets, cancellation signal, and event callbacks.
+ */
 export async function runAiGeneration(options: {
   selection: AiModelSelection
   description: string
