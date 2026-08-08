@@ -178,8 +178,11 @@ describe('EditorCanvas screen actions', () => {
     root.innerHTML = markup
 
     expect(root.querySelector('#editor-empty-state-title')?.textContent)
-      .toBe('Create your first screen')
+      .toBe('Your canvas is empty')
+    expect(root.querySelector('.editor-empty-state-phone')).not.toBeNull()
+    expect(root.querySelector('.editor-empty-state-phone-island')).not.toBeNull()
+    expect(root.querySelector('.editor-empty-state-artboard-plus')).toBeNull()
     expect(Array.from(root.querySelectorAll('button')).map((button) => button.textContent.trim()))
-      .toEqual(['Blank screen', 'Generate with AI'])
+      .toEqual(['Generate with AI', 'Blank screen'])
   })
 })

@@ -194,24 +194,34 @@ export const EditorCanvas = ({
         ? (
             <section className="editor-empty-state" aria-labelledby="editor-empty-state-title">
               <div className="editor-empty-state-content">
-                <span className="editor-empty-state-icon" aria-hidden="true">
-                  <Plus size={20} />
-                </span>
-                <h1 id="editor-empty-state-title">Create your first screen</h1>
-                <p>Start with a blank canvas or let AI create a first draft for you.</p>
+                <div className="editor-empty-state-phone" aria-hidden="true">
+                  <div className="editor-empty-state-phone-frame">
+                    <div className="editor-empty-state-phone-screen">
+                      <span className="editor-empty-state-phone-island" />
+                      <div className="editor-empty-state-phone-skeleton">
+                        <span className="editor-empty-state-skel editor-empty-state-skel-title" />
+                        <span className="editor-empty-state-skel editor-empty-state-skel-hero" />
+                        <span className="editor-empty-state-skel editor-empty-state-skel-line" />
+                        <span className="editor-empty-state-skel editor-empty-state-skel-line is-short" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <h1 id="editor-empty-state-title">Your canvas is empty</h1>
+                <p>Add a blank screen, or generate a first draft with AI.</p>
                 <div className="editor-empty-state-actions">
-                  <Button className="editor-empty-state-primary" size="lg" onClick={onAddSlide}>
-                    <Plus size={16} />
-                    Blank screen
-                  </Button>
                   <Button
-                    variant="outline"
+                    className="editor-empty-state-primary"
                     size="lg"
                     onClick={onGenerateWithAi}
                     disabled={aiActionsDisabled}
                   >
                     <AiGenerative size={16} />
                     Generate with AI
+                  </Button>
+                  <Button variant="outline" size="lg" onClick={onAddSlide}>
+                    <Plus size={16} />
+                    Blank screen
                   </Button>
                 </div>
               </div>
