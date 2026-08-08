@@ -547,11 +547,12 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
         <div className="ai-modal-card" role="dialog" aria-modal="true" aria-label={isEditMode ? 'Edit screen with AI' : 'Generate with AI'}>
           <div className="ai-modal-header">
             <div className="ai-modal-title">
-              <AiGenerative size={16} />
-              <div>
-                <h2>{isEditMode ? 'Edit screen with AI' : 'Generate with AI'}</h2>
-                {targetSlide && <span>{targetSlide.name}</span>}
-              </div>
+              <h2>{isEditMode ? 'Edit screen with AI' : 'Generate with AI'}</h2>
+              <p>
+                {isEditMode
+                  ? (targetSlide ? targetSlide.name : 'Tell us what to change on this screen.')
+                  : 'Describe your app — we\'ll build the screens.'}
+              </p>
             </div>
             <button className="ai-modal-close" onClick={requestClose} aria-label="Close"><X size={16} /></button>
           </div>

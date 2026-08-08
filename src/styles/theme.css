@@ -710,16 +710,15 @@ select:focus-visible {
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.ai-modal-header,
 .ai-modal-footer { border-color: var(--border); }
 .ai-modal-title { color: var(--foreground); }
-.ai-modal-title svg { color: var(--foreground); }
-.ai-modal-title span { color: var(--muted-foreground); }
+.ai-modal-title p { color: var(--muted-foreground); }
 .ai-modal-close { color: var(--muted-foreground); }
 
 .ai-modal-close:hover {
   background: var(--accent);
   color: var(--accent-foreground);
+  border-color: color-mix(in oklch, var(--foreground) 8%, transparent);
 }
 
 .ai-modal-body { scrollbar-color: var(--border) transparent; }
