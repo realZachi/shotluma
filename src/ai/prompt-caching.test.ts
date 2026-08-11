@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildStreamRequestOptions,
+  withMovingCacheBreakpoint,
   withMovingAnthropicCacheBreakpoint,
+  withStaticInstructionCacheBreakpoint,
 } from './prompt-caching'
 import type { ModelMessage } from 'ai'
 
@@ -14,7 +16,12 @@ describe('buildStreamRequestOptions', () => {
 
     expect(options).toEqual({
       reasoning: 'high',
-      providerOptions: { openai: { promptCacheKey: 'run-key-1' } },
+      providerOptions: {
+        openai: {
+          promptCacheKey: 'run-key-1',
+          promptCacheOptions: { mode: 'implicit', ttl: '30m' },
+        },
+      },
     })
   })
 
@@ -26,7 +33,11 @@ describe('buildStreamRequestOptions', () => {
 
     expect(options).toEqual({
       providerOptions: {
-        openai: { reasoningEffort: 'max', promptCacheKey: 'run-key-2' },
+        openai: {
+          reasoningEffort: 'max',
+          promptCacheKey: 'run-key-2',
+          promptCacheOptions: { mode: 'implicit', ttl: '30m' },
+        },
       },
     })
   })
@@ -103,6 +114,35 @@ describe('buildStreamRequestOptions', () => {
     )
 
     expect(options.providerOptions?.google).toBeUndefined()
+  })
+})
+
+describe('withStaticInstructionCacheBreakpoint', () => {
+  it('marks the stable OpenAI instruction prefix explicitly', () => {
+    expect(withStaticInstructionCacheBreakpoint('Stable instructions', 'openai')).toEqual({
+      role: 'system',
+      content: 'Stable instructions',
+      providerOptions: {
+        openai: { promptCacheBreakpoint: { mode: 'explicit' } },
+      },
+    })
+  })
+
+  it('marks Anthropic and Alibaba instructions with their native cache control', () => {
+    expect(withStaticInstructionCacheBreakpoint('Stable', 'anthropic')).toMatchObject({
+      providerOptions: {
+        anthropic: { cacheControl: { type: 'ephemeral' } },
+      },
+    })
+    expect(withStaticInstructionCacheBreakpoint('Stable', 'qwen')).toMatchObject({
+      providerOptions: {
+        alibaba: { cacheControl: { type: 'ephemeral' } },
+      },
+    })
+  })
+
+  it('leaves providers without explicit instruction caching unchanged', () => {
+    expect(withStaticInstructionCacheBreakpoint('Stable', 'google')).toBe('Stable')
   })
 })
 
@@ -191,5 +231,26 @@ describe('withMovingAnthropicCacheBreakpoint', () => {
 
   it('handles an empty message list', () => {
     expect(withMovingAnthropicCacheBreakpoint([])).toEqual([])
+  })
+
+  it('applies the same moving pattern to Alibaba without touching Anthropic options', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'user',
+        content: 'older',
+        providerOptions: {
+          alibaba: { cacheControl: { type: 'ephemeral' } },
+          anthropic: { other: 'kept' },
+        },
+      },
+      user('newest'),
+    ]
+
+    const marked = withMovingCacheBreakpoint(messages, 'alibaba')
+
+    expect(marked[0]?.providerOptions).toEqual({ anthropic: { other: 'kept' } })
+    expect(marked[1]?.providerOptions).toEqual({
+      alibaba: { cacheControl: { type: 'ephemeral' } },
+    })
   })
 })

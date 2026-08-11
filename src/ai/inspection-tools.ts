@@ -14,7 +14,25 @@ import {
   type ToolContext,
 } from './tool-context'
 
-export const createInspectionTools = ({ controller, emit }: ToolContext) => {
+export const PREVIEW_LIMITS = { generate: 3, edit: 4 } as const
+
+export const reservePreviewAttempt = (
+  counts: Map<string, number>,
+  slideId: string,
+  limit: number,
+): boolean => {
+  const count = counts.get(slideId) ?? 0
+  if (count >= limit) return false
+  counts.set(slideId, count + 1)
+  return true
+}
+
+export const createInspectionTools = (
+  { controller, emit }: ToolContext,
+  options: { mode: 'generate' | 'edit' } = { mode: 'generate' },
+) => {
+  const previewAttempts = new Map<string, number>()
+  const previewLimit = PREVIEW_LIMITS[options.mode]
   const deleteElement = tool({
     description: 'Delete an element from a slide.',
     inputSchema: z.object({
@@ -75,6 +93,12 @@ export const createInspectionTools = ({ controller, emit }: ToolContext) => {
       | { ok: false; error: string }
     > => {
       if (!getSlide(controller, slideId)) return notFound(slideNotFoundMessage(slideId))
+      if (!reservePreviewAttempt(previewAttempts, slideId, previewLimit)) {
+        return {
+          ok: false,
+          error: `Preview limit reached for ${slideId}. Use the existing previews and finish this screen instead of requesting another image.`,
+        }
+      }
       emit({ tool: 'render_slide_preview', slideId })
       const [capture, measurement] = await Promise.all([
         captureSlidePreview(slideId),
@@ -106,6 +130,10 @@ export const createInspectionTools = ({ controller, emit }: ToolContext) => {
             type: 'file',
             mediaType: output.mediaType,
             data: { type: 'data', data: output.image },
+            // A slide preview is a composition/thumbnail check. Measurements
+            // already carry exact geometry, so OpenAI's low-detail vision path
+            // avoids paying original-resolution image tokens for every repair.
+            providerOptions: { openai: { imageDetail: 'low' } },
           },
         ],
       }

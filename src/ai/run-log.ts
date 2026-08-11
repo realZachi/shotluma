@@ -6,7 +6,7 @@ import {
 } from './provider-catalog'
 import type { FinishReason, LanguageModelUsage } from 'ai'
 
-export const AI_RUN_LOG_SCHEMA_VERSION = 1
+export const AI_RUN_LOG_SCHEMA_VERSION = 2
 export const AI_RUN_LOG_TEXT_LIMIT = 250_000
 export const AI_RUN_LOG_ENDPOINT = '/api/ai-run-logs'
 export const AI_RUN_LOG_DIRECTORY = 'ai-logs'
@@ -31,11 +31,18 @@ export type AiRunToolCall = {
   offsetMs: number
 }
 
+export type AiRunStep = {
+  usage: AiRunTokenUsage
+  toolCallCount: number
+  previewCount: number
+}
+
 export type AiRunReport = {
   outcome: AiRunOutcome
   assistantOutput: string
   reasoningOutput: string
   toolCalls: AiRunToolCall[]
+  steps: AiRunStep[]
   slidesCreated: number
   usage: AiRunTokenUsage | null
   finishReason: FinishReason | null
@@ -61,6 +68,7 @@ export type AiRunLog = {
   reasoningOutput: string
   reasoningOutputTruncated: boolean
   toolCalls: AiRunToolCall[]
+  steps: AiRunStep[]
   slidesCreated: number
   usage: AiRunTokenUsage | null
   finishReason: FinishReason | null
@@ -137,6 +145,11 @@ export const createAiRunLog = ({
     reasoningOutput: reasoningOutput.text,
     reasoningOutputTruncated: reasoningOutput.isTruncated,
     toolCalls: report.toolCalls.map((toolCall) => ({ ...toolCall })),
+    steps: report.steps.slice(0, 64).map((step) => ({
+      usage: { ...step.usage },
+      toolCallCount: nonNegativeInteger(step.toolCallCount),
+      previewCount: nonNegativeInteger(step.previewCount),
+    })),
     slidesCreated: nonNegativeInteger(report.slidesCreated),
     usage: report.usage ? { ...report.usage } : null,
     finishReason: report.finishReason,
@@ -210,6 +223,24 @@ const normalizeToolCalls = (value: unknown): AiRunToolCall[] | null => {
   return toolCalls
 }
 
+const normalizeSteps = (value: unknown): AiRunStep[] | null => {
+  if (!Array.isArray(value) || value.length > 64) return null
+  const steps: AiRunStep[] = []
+  for (const item of value) {
+    if (!isRecord(item)) return null
+    const usage = normalizeUsage(item['usage'])
+    const toolCallCount = item['toolCallCount']
+    const previewCount = item['previewCount']
+    if (
+      !usage
+      || !isNonNegativeNumber(toolCallCount)
+      || !isNonNegativeNumber(previewCount)
+    ) return null
+    steps.push({ usage, toolCallCount, previewCount })
+  }
+  return steps
+}
+
 const isAiRunMode = (value: unknown): value is AiRunMode =>
   value === 'generate' || value === 'edit'
 
@@ -242,6 +273,18 @@ const normalizeRequest = (value: unknown): AiRunLog['request'] | null => {
     descriptionCharacters: value['descriptionCharacters'],
     screenshotCount: value['screenshotCount'],
   }
+}
+
+const normalizeRunDetails = (value: Record<string, unknown>): {
+  toolCalls: AiRunToolCall[]
+  steps: AiRunStep[]
+  usage: AiRunTokenUsage | null
+} | null => {
+  const toolCalls = normalizeToolCalls(value['toolCalls'])
+  const steps = normalizeSteps(value['steps'])
+  const usage = normalizeUsage(value['usage'])
+  if (!toolCalls || !steps || usage === undefined) return null
+  return { toolCalls, steps, usage }
 }
 
 export const normalizeAiRunLog = (value: unknown): AiRunLog | null => {
@@ -285,9 +328,8 @@ export const normalizeAiRunLog = (value: unknown): AiRunLog | null => {
     || !(errorMessage === null || typeof errorMessage === 'string')
   ) return null
 
-  const toolCalls = normalizeToolCalls(value['toolCalls'])
-  const usage = normalizeUsage(value['usage'])
-  if (!toolCalls || usage === undefined) return null
+  const details = normalizeRunDetails(value)
+  if (!details) return null
 
   return {
     schemaVersion: AI_RUN_LOG_SCHEMA_VERSION,
@@ -304,9 +346,10 @@ export const normalizeAiRunLog = (value: unknown): AiRunLog | null => {
     assistantOutputTruncated,
     reasoningOutput,
     reasoningOutputTruncated,
-    toolCalls,
+    toolCalls: details.toolCalls,
+    steps: details.steps,
     slidesCreated,
-    usage,
+    usage: details.usage,
     finishReason,
     errorMessage,
   }

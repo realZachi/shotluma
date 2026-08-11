@@ -89,6 +89,11 @@ export const buildElementTypes = (
   return types
 }
 
+export const warningsForElement = (
+  warnings: string[],
+  elementId: string,
+): string[] => warnings.filter((warning) => warning.includes(` ${elementId} `))
+
 export const withMeasurement = async (
   controller: AiEditorController,
   slideId: string,
@@ -101,5 +106,8 @@ export const withMeasurement = async (
   const box = measurement?.boxes.find(
     (candidate) => candidate.elementId === elementId,
   ) ?? null
-  return { box, slideWarnings: measurement?.warnings ?? [] }
+  return {
+    box,
+    slideWarnings: warningsForElement(measurement?.warnings ?? [], elementId),
+  }
 }

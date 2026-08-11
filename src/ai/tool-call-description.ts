@@ -6,6 +6,7 @@ const truncate = (value: string, max: number) =>
 const STATIC_TOOL_DETAILS = new Map<string, string>([
   ['get_canvas_state', 'Canvas state retrieved'],
   ['add_slide', 'New screen created'],
+  ['add_slides', 'Planned screens created'],
   ['set_slide_background', 'Background updated'],
   ['delete_slide', 'Screen deleted'],
   ['add_image', 'Image added'],

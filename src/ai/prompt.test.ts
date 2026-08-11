@@ -210,30 +210,31 @@ describe('AI prompt batching', () => {
     expect(instructions).toContain('Build a whole slide in one turn')
     expect(instructions).toContain('Batch each repair round')
     expect(instructions).toContain('every update_element fix plus the follow-up render_slide_preview')
-    expect(instructions).toContain('emit its full planned composition as ONE batched turn')
+    expect(instructions).toContain('Emit each slide\'s full planned composition as ONE batched turn')
   })
 
-  it('asks the model to declare its screen plan before building', () => {
+  it('creates the declared screen plan in one batched first turn', () => {
     const instructions = buildInstructions()
 
-    expect(instructions).toContain('Call declare_plan once the composition plan is fixed')
-    expect(instructions).toContain('BEFORE the first add_slide')
+    expect(instructions).toContain('FIRST tool turn, call declare_plan and add_slides together')
+    expect(instructions).toContain('add_slides creates every planned screen at once')
   })
 
   it('does not ask for a screen plan in edit mode', () => {
     expect(buildInstructions({ targetSlideId: 'slide-1' })).not.toContain('declare_plan')
   })
 
-  it('instructs a batched final pass in generate mode', () => {
+  it('does not repeat previews that already passed', () => {
     const instructions = buildInstructions()
 
-    expect(instructions).toContain('request render_slide_preview for EVERY slide together in one batched turn')
+    expect(instructions).toContain('do not re-render screens that already passed their preview')
+    expect(instructions).toContain('request another preview only if a later change affected that screen')
   })
 
   it('frames inspect_slide as rarely needed since mutations return boxes and warnings', () => {
     const instructions = buildInstructions()
 
-    expect(instructions).toContain('Mutation results already return the element\'s box and the slide\'s warnings')
+    expect(instructions).toContain('Mutation results return the changed element\'s box')
     expect(instructions).toContain('inspect_slide is almost never worth its own turn')
   })
 })

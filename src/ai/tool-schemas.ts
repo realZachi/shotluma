@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import { iconIds } from '../icons'
 
-export const COORDINATE_NOTE = 'Percent of the 1290x2796 canvas. x/y is the top-left corner of the element, width is percent of canvas width; height is automatic. x/y may be negative (down to -35) and width may exceed 100 (up to 140), so elements can deliberately bleed off the canvas edges for cropped, dynamic compositions.'
+export const COORDINATE_NOTE = 'Canvas percent: x/y are the top-left; width uses canvas width; height is automatic. Range: x/y -35..97, width 8..140.'
 
-export const MEASUREMENT_NOTE = 'The result includes the element\'s actually rendered bounding box and any slide layout warnings — address warnings before moving on.'
+export const MEASUREMENT_NOTE = 'Returns the rendered box and warnings involving this element.'
 
 export const fontFamilySchema = z
   .enum([
@@ -30,7 +30,7 @@ export const fontFamilySchema = z
     'Arial, sans-serif',
   ])
   .describe(
-    'Font to use. Display: \'Bricolage Grotesque Variable\', \'Syne Variable\', \'Bebas Neue\' (400 only), \'Archivo Black\' (400 only), \'Anton\' (400 only). Sans: \'Instrument Sans Variable\', \'Manrope Variable\', \'Outfit Variable\', \'Plus Jakarta Sans Variable\', \'Sora Variable\', \'Inter Tight Variable\'. Serif: \'Fraunces\' (600), \'Playfair Display\' (600/700), \'DM Serif Display\' (400), \'Libre Baskerville\' (400/700), \'Cormorant Garamond\' (400/600/700). Mono: \'Space Mono\' (400/700), \'JetBrains Mono\' (400/700). Handwritten: \'Caveat\' (400/700), \'Permanent Marker\' (400 only). \'Arial, sans-serif\' is a plain fallback.',
+    'Loaded font family. The prompt lists supported weights and intended uses.',
   )
 
 export const shapeSchema = z.enum([
@@ -54,7 +54,7 @@ export const shapeSchema = z.enum([
 export const iconSchema = z
   .enum(iconIds)
   .describe(
-    'Hugeicons icon id. Pick from the curated library: Status (check, check-circle, cancel, cancel-circle, alert, info, help, ban), Social Proof (star, heart, thumbs-up, smile, award, medal, crown, badge-check, certificate), Arrows (arrow-up, arrow-right, arrow-down, arrow-left, arrow-up-right, compass, navigation), Communication (bell, mail, message, chat, notification, phone, call), Media (camera, image, play, video, music, mic, headphones, view, pen, edit), Business (chart, bar-chart, pie-chart, analytics-up, dollar, percent, wallet, coins, shopping-bag, cart, store, tag), Security (lock, shield, key, cloud, download, wifi, power), Time & Location (alarm, stopwatch, timer, calendar, map-pin, location, route), Nature (sun, moon, leaf, snow, droplet, fire, bulb), Accent (sparkles, zap, flash, rocket, target, globe, diamond, flag, gift, search, settings, home). NEVER use emoji characters on canvas — always use an icon from this library instead.',
+    'Curated Hugeicons id. Use these vector icons instead of emoji.',
   )
 
 export const backgroundPatternSchema = z.enum([
@@ -76,7 +76,7 @@ export const deviceStyleSchema = z
     'tilted-hand',
   ])
   .describe(
-    'Photorealistic iPhone mockup. \'iphone-17-a\' and \'iphone-17-b\' are upright/front views (width 58-72 fully in frame). \'iphone-17-c\', \'iphone-17-d\', and \'iphone-17-e\' are low angled views (width 90-112, or up to 115-140 with negative x/y for a dramatic cropped close-up). \'iphone-17-f\' is a leaning portrait phone (width 88-105). \'tilted-hand\' is a hand holding the phone (width 110-125, usually cropped by a canvas edge). Perspective, light, and shadow are baked into every overlay.',
+    'Photorealistic iPhone style. The prompt gives composition ranges for each style.',
   )
 
 export const screenThemeSchema = z

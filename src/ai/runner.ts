@@ -4,18 +4,21 @@ import {
   smoothStream,
   streamText,
   type FinishReason,
+  type LanguageModelUsage,
   type ModelMessage,
   type TextStreamPart,
   type ToolSet,
 } from 'ai'
 import { uid } from '../utils'
+import { relayChatToolImages } from './chat-tool-images'
 import { runCodexAppServerGeneration } from './codex-app-server'
 import { readCodexConnection } from './codex-connection'
 import { scopeAiControllerToSlide, type AiEditorController } from './controller'
 import { buildInstructions, buildUserMessage } from './prompt'
 import {
   buildStreamRequestOptions,
-  withMovingAnthropicCacheBreakpoint,
+  withMovingCacheBreakpoint,
+  withStaticInstructionCacheBreakpoint,
 } from './prompt-caching'
 import {
   AI_REASONING_EFFORT_LABELS,
@@ -31,6 +34,7 @@ import {
 import {
   toAiRunTokenUsage,
   type AiRunReport,
+  type AiRunStep,
   type AiRunTokenUsage,
   type AiRunToolCall,
 } from './run-log'
@@ -54,6 +58,10 @@ const extractMediaType = (dataUrl: string): string => {
 }
 
 type PreparedAsset = { assetId: string; name: string; dataUrl: string }
+
+// Stable across runs in this browser session so the static prompt/tool prefix can
+// be reused, but naturally sharded across clients to avoid a single hot cache key.
+const PROMPT_CACHE_SESSION_ID = uid('shotluma-cache')
 
 const buildUserContent = (options: {
   description: string
@@ -167,10 +175,17 @@ const describeError = (error: unknown, selection: AiModelSelection): string => {
 const isAbortError = (error: unknown): boolean =>
   (error instanceof Error && error.name === 'AbortError') || (error instanceof DOMException && error.name === 'AbortError')
 
+const countSlideDrafts = (input: unknown): number => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return 0
+  const slides = (input as Record<string, unknown>)['slides']
+  return Array.isArray(slides) ? Math.min(slides.length, 8) : 0
+}
+
 type AiRunAccumulator = {
   assistantOutput: string
   reasoningOutput: string
   toolCalls: AiRunToolCall[]
+  steps: AiRunStep[]
   slidesCreated: number
   usage: AiRunTokenUsage | null
   finishReason: FinishReason | null
@@ -227,9 +242,12 @@ const collectStreamPart = <TOOLS extends ToolSet>(options: {
         const screens = parsePlanInput(part.input)
         if (screens.length > 0) onEvent({ type: 'plan', screens })
       }
-      if (part.toolName === 'add_slide') {
-        onEvent({ type: 'slide-started', index: accumulator.slidesCreated })
-        accumulator.slidesCreated += 1
+      if (part.toolName === 'add_slides') {
+        const count = countSlideDrafts(part.input)
+        for (let index = 0; index < count; index += 1) {
+          onEvent({ type: 'slide-started', index: accumulator.slidesCreated })
+          accumulator.slidesCreated += 1
+        }
       }
       const detail = describeAiToolCall(part.toolName, part.input)
       accumulator.toolCalls.push({
@@ -279,6 +297,7 @@ const openAiGenerationStream = (options: {
   enableOverlayAssets?: boolean
   signal?: AbortSignal
   onActivity?: (activity: AiToolActivity) => void
+  onStepUsage?: (usage: LanguageModelUsage, toolNames: string[]) => void
 }) => {
   const {
     model,
@@ -289,18 +308,33 @@ const openAiGenerationStream = (options: {
     enableOverlayAssets,
     signal,
     onActivity,
+    onStepUsage,
   } = options
   const runController = targetSlideId
     ? scopeAiControllerToSlide(controller, targetSlideId)
     : controller
-  const requestOptions = buildStreamRequestOptions(selection, uid('shotluma-run'))
+  const promptCacheKey = [
+    PROMPT_CACHE_SESSION_ID,
+    selection.model,
+    selection.reasoningEffort ?? 'default-effort',
+    targetSlideId ? 'edit' : 'generate',
+    enableOverlayAssets ? 'overlay' : 'standard',
+  ].join(':')
+  const requestOptions = buildStreamRequestOptions(selection, promptCacheKey)
+  const instructions = buildInstructions({
+    ...(targetSlideId ? { targetSlideId } : {}),
+    ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
+  })
+  const movingCacheProvider = selection.provider === 'anthropic'
+    ? 'anthropic'
+    : selection.provider === 'qwen' ? 'alibaba' : null
+  const needsChatImageRelay = selection.provider === 'moonshot'
+    || selection.provider === 'openrouter'
+    || selection.provider === 'qwen'
 
   return streamText({
     model,
-    instructions: buildInstructions({
-      ...(targetSlideId ? { targetSlideId } : {}),
-      ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
-    }),
+    instructions: withStaticInstructionCacheBreakpoint(instructions, selection.provider),
     messages: [{ role: 'user', content }],
     tools: createEditorTools(runController, {
       mode: targetSlideId ? 'edit' : 'generate',
@@ -310,14 +344,24 @@ const openAiGenerationStream = (options: {
     }),
     stopWhen: isStepCount(64),
     experimental_transform: narrationSmoothing(),
+    onStepFinish: ({ usage, toolCalls }) => {
+      onStepUsage?.(usage, toolCalls.map((toolCall) => toolCall.toolName))
+    },
     ...requestOptions,
-    // Anthropic caches nothing without explicit breakpoints; keep one moving
-    // breakpoint on the last message so every step reuses the whole prefix.
-    ...(selection.provider === 'anthropic'
+    // Anthropic and Alibaba require explicit message breakpoints. Keep one
+    // moving forward so each step can reuse the growing tool-loop prefix.
+    ...(movingCacheProvider || needsChatImageRelay
       ? {
-          prepareStep: ({ messages }: { messages: ModelMessage[] }) => ({
-            messages: withMovingAnthropicCacheBreakpoint(messages),
-          }),
+          prepareStep: ({ messages }: { messages: ModelMessage[] }) => {
+            const relayed = needsChatImageRelay
+              ? relayChatToolImages(messages)
+              : messages
+            return {
+              messages: movingCacheProvider
+                ? withMovingCacheBreakpoint(relayed, movingCacheProvider)
+                : relayed,
+            }
+          },
         }
       : {}),
     ...(signal ? { abortSignal: signal } : {}),
@@ -424,6 +468,13 @@ const runDirectProviderGeneration = async (options: {
     ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
     ...(signal ? { signal } : {}),
     ...(onActivity ? { onActivity } : {}),
+    onStepUsage: (usage, toolNames) => {
+      accumulator.steps.push({
+        usage: toAiRunTokenUsage(usage),
+        toolCallCount: toolNames.length,
+        previewCount: toolNames.filter((name) => name === 'render_slide_preview').length,
+      })
+    },
   })
 
   for await (const part of result.stream) {
@@ -506,6 +557,7 @@ export async function runAiGeneration(options: {
     assistantOutput: '',
     reasoningOutput: '',
     toolCalls: [],
+    steps: [],
     slidesCreated: 0,
     usage: null,
     finishReason: null,
@@ -519,6 +571,10 @@ export async function runAiGeneration(options: {
       assistantOutput: accumulator.assistantOutput,
       reasoningOutput: accumulator.reasoningOutput,
       toolCalls: accumulator.toolCalls.map((toolCall) => ({ ...toolCall })),
+      steps: accumulator.steps.map((step) => ({
+        ...step,
+        usage: { ...step.usage },
+      })),
       slidesCreated: accumulator.slidesCreated,
       usage: accumulator.usage,
       finishReason: accumulator.finishReason,

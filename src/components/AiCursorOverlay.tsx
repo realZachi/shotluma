@@ -12,6 +12,7 @@ const LABELS: Record<string, string> = {
   add_shape: 'Shape',
   add_image: 'Image',
   add_slide: 'New screen',
+  add_slides: 'New screens',
   rename_slide: 'Rename',
   set_slide_background: 'Background',
   set_device_screenshot: 'Screenshot',

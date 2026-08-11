@@ -13,6 +13,53 @@ import {
 } from './tool-context'
 import { backgroundPatternSchema } from './tool-schemas'
 
+const newSlideSchema = z.object({
+  name: z.string().optional().describe('Short screen name. Defaults to "Screen N".'),
+  background: z.object({
+    type: z.enum(['solid', 'gradient']),
+    color1: z.string().describe('Primary hex color.'),
+    color2: z.string().describe('Secondary hex color; equal to color1 for solid.'),
+    angle: z.number().describe('Gradient angle, 0-360; ignored for solid.'),
+    gradientKind: z.enum(['linear', 'radial']).optional(),
+    pattern: backgroundPatternSchema.optional(),
+    patternColor: z.string().optional().describe('Pattern hex color.'),
+    patternOpacity: z.number().optional().describe('Pattern opacity, 0-0.8.'),
+    patternScale: z.number().optional().describe('Pattern scale, 10-80.'),
+  }).optional().describe('Initial background; defaults to near-black.'),
+})
+
+type NewSlideInput = z.infer<typeof newSlideSchema>
+
+const normalizeNewSlide = ({ name, background }: NewSlideInput) => {
+  const normalizedBackground = background
+    ? {
+        type: background.type,
+        color1: background.color1,
+        color2: background.color2,
+        angle: clampAngle(background.angle),
+        ...(background.gradientKind !== undefined
+          ? { gradientKind: background.gradientKind }
+          : {}),
+        ...(background.pattern !== undefined
+          ? { pattern: background.pattern }
+          : {}),
+        ...(background.patternColor !== undefined
+          ? { patternColor: background.patternColor }
+          : {}),
+        ...(background.patternOpacity !== undefined
+          ? { patternOpacity: clamp(background.patternOpacity, 0, 0.8) }
+          : {}),
+        ...(background.patternScale !== undefined
+          ? { patternScale: clampPatternScale(background.patternScale) }
+          : {}),
+      }
+    : undefined
+  return {
+    ...(name !== undefined ? { name } : {}),
+    ...(normalizedBackground ? { background: normalizedBackground } : {}),
+  }
+}
+
 export const createSlideTools = ({ controller, emit }: ToolContext) => {
   const getCanvasState = tool({
     description:
@@ -21,52 +68,24 @@ export const createSlideTools = ({ controller, emit }: ToolContext) => {
     execute: async () => controller.snapshot(),
   })
 
-  const addSlide = tool({
-    description: 'Create a new, empty slide and append it to the end of the project. Returns the new slide id.',
+  const addSlides = tool({
+    description:
+      'Create every planned empty screen in one call and append them in order. Use exactly once after declare_plan; the returned ids are then available for all slide composition calls.',
     inputSchema: z.object({
-      name: z.string().optional().describe('Slide name shown in the editor sidebar. Defaults to "Screen N".'),
-      background: z.object({
-        type: z.enum(['solid', 'gradient']),
-        color1: z.string().describe('Primary color as a hex string, e.g. #111116.'),
-        color2: z.string().describe('Secondary color as a hex string. For solid backgrounds, set this equal to color1.'),
-        angle: z.number().describe('Gradient angle in degrees, 0-360. Ignored for solid backgrounds.'),
-        gradientKind: z.enum(['linear', 'radial']).optional().describe('Gradient geometry. Defaults to linear.'),
-        pattern: backgroundPatternSchema.optional().describe('Optional decorative background pattern.'),
-        patternColor: z.string().optional().describe('Hex color for the optional pattern.'),
-        patternOpacity: z.number().optional().describe('Pattern opacity, 0-0.8.'),
-        patternScale: z.number().optional().describe('Pattern scale on the internal canvas, 10-80.'),
-      }).optional().describe('Background for the new slide. Defaults to a near-black solid color.'),
+      slides: z.array(newSlideSchema).min(1).max(8)
+        .describe('All planned screens in build order.'),
     }),
-    execute: async ({ name, background }) => {
-      const normalizedBackground = background
-        ? {
-            type: background.type,
-            color1: background.color1,
-            color2: background.color2,
-            angle: clampAngle(background.angle),
-            ...(background.gradientKind !== undefined
-              ? { gradientKind: background.gradientKind }
-              : {}),
-            ...(background.pattern !== undefined
-              ? { pattern: background.pattern }
-              : {}),
-            ...(background.patternColor !== undefined
-              ? { patternColor: background.patternColor }
-              : {}),
-            ...(background.patternOpacity !== undefined
-              ? { patternOpacity: clamp(background.patternOpacity, 0, 0.8) }
-              : {}),
-            ...(background.patternScale !== undefined
-              ? { patternScale: clampPatternScale(background.patternScale) }
-              : {}),
-          }
-        : undefined
-      const slideId = controller.addSlide({
-        ...(name !== undefined ? { name } : {}),
-        ...(normalizedBackground ? { background: normalizedBackground } : {}),
+    execute: async ({ slides }) => {
+      const created = slides.map((input, index) => {
+        const slideId = controller.addSlide(normalizeNewSlide(input))
+        emit({ tool: 'add_slides', slideId, x: 50, y: 16 + index * 4 })
+        return { slideId, index }
       })
-      emit({ tool: 'add_slide', slideId, x: 50, y: 16 })
-      return { ok: true, slideId }
+      return {
+        ok: true as const,
+        slides: created,
+        nextStep: 'Compose the new slides using these ids. Do not call add_slides again.',
+      }
     },
   })
 
@@ -170,7 +189,7 @@ export const createSlideTools = ({ controller, emit }: ToolContext) => {
 
   return {
     get_canvas_state: getCanvasState,
-    add_slide: addSlide,
+    add_slides: addSlides,
     rename_slide: renameSlide,
     set_slide_background: setSlideBackground,
     delete_slide: deleteSlide,

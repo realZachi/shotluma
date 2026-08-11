@@ -63,6 +63,12 @@ type CodexNarrationUpdate = {
 const isObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
+const countSlideDrafts = (value: unknown): number => {
+  if (!isObject(value)) return 0
+  const slides = value['slides']
+  return Array.isArray(slides) ? Math.min(slides.length, 8) : 0
+}
+
 export const parseCodexAccountState = (value: unknown): CodexAccountState => {
   if (!isObject(value)) return { status: 'unsupported' }
   const account = value['account']
@@ -408,9 +414,12 @@ export const runCodexAppServerGeneration = async (
       const screens = parsePlanInput(request.arguments)
       if (screens.length > 0) options.onEvent({ type: 'plan', screens })
     }
-    if (request.toolName === 'add_slide') {
-      options.onEvent({ type: 'slide-started', index: slidesCreated })
-      slidesCreated += 1
+    if (request.toolName === 'add_slides') {
+      const count = countSlideDrafts(request.arguments)
+      for (let index = 0; index < count; index += 1) {
+        options.onEvent({ type: 'slide-started', index: slidesCreated })
+        slidesCreated += 1
+      }
     }
     options.onEvent({
       type: 'tool',
