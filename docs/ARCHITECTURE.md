@@ -79,7 +79,7 @@ Persistence is browser-local:
 
 Avoid putting credentials or provider responses into persisted project data.
 
-Developer AI run logging is enabled only when `SHOTLUMA_AI_LOGGING=true`. The browser sends a versioned, bounded record to the local Vite middleware, which validates it and writes one JSON file per run to the git-ignored `ai-logs/` directory in the repository. Records include normalized token usage, visible text and reasoning output, tool activity, and coarse request sizes. Shotluma does not add input prompt text, screenshot payloads or names, credentials, or raw provider metadata to the records.
+Developer AI run logging is enabled only when `SHOTLUMA_AI_LOGGING=true`. The browser sends a versioned, bounded record to the local Vite middleware, which validates it and writes one JSON file per run to the git-ignored `ai-logs/` directory in the repository. Records include normalized total and per-step token usage, per-step tool and preview counts, visible text and reasoning output, tool activity, and coarse request sizes. Shotluma does not add input prompt text, screenshot payloads or names, credentials, or raw provider metadata to the records.
 
 ## Export
 
@@ -120,7 +120,8 @@ The AI feature is split into explicit layers:
 | `src/ai/codex-bridge-client.ts` | Paired loopback HTTP transport and App Server RPC correlation |
 | `src/ai/codex-connection.ts` | Browser pairing state and generated Codex setup prompt |
 | `src/ai/prompt.ts` | Design rules and coordinate semantics |
-| `src/ai/prompt-caching.ts` | Per-provider cache routing (Anthropic breakpoints, OpenAI cache keys) |
+| `src/ai/prompt-caching.ts` | OpenAI, Anthropic, and Qwen prompt-cache routing and breakpoints |
+| `src/ai/chat-tool-images.ts` | Image relay for providers whose chat tool results support text only |
 | `src/ai/tools.ts` | Tool composition and generate/edit tool boundary |
 | `src/ai/*-tools.ts`, `src/ai/*-tool.ts` | Focused slide, media, text, update, inspection, and overlay-asset tools |
 | `src/ai/chroma-key.ts` | Pure soft chroma-key pixel math for overlay cutouts |

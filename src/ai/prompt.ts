@@ -19,15 +19,14 @@ export function buildInstructions(options: AiPromptOptions = {}): string {
 4. Make the user's requested change. Preserve unrelated content, screenshots, and styling unless the user explicitly asks for a full redesign.
 5. Uploaded screenshots are OPTIONAL in this mode. If none were provided, edit the existing elements and use any existing device screenshot as-is. Never add a placeholder device merely because no screenshot was uploaded.
 6. After editing, follow the verify routine below. Keep the run focused on this single screen.`
-    : `1. Call get_canvas_state first. It shows the slides that already exist in the project and the ids of every uploaded asset (screenshots and app logo).
-2. Do NOT modify or delete the user's existing slides. Only create NEW slides for your design, and append them with add_slide.
-3. Decide how many screens to build yourself - typically 3 to 6, depending on how many screenshots were provided and how much story the app has to tell. Do not pad the set with filler screens just to hit a number.
-4. ART DIRECTION - commit to a concept before you build anything:
+    : `1. The user message already lists every screenshot and logo asset available to this run. Do NOT modify or delete existing slides; create only NEW slides for this design.
+2. Decide how many screens to build yourself - typically 3 to 6, depending on how many screenshots were provided and how much story the app has to tell. Do not pad the set with filler screens just to hit a number.
+3. ART DIRECTION - commit to a concept before you build anything:
    - Palette: background, text color, one accent. Be confident - a saturated brand color or a rich dark tone as a full-bleed background almost always beats a timid neutral. Take cues from the app's own screenshots, logo, and subject.
    - One font pairing (a display face for headlines, a quieter face for supporting copy) and ONE highlight treatment.
    - A composition plan: assign every slide an archetype from the library below. No two adjacent slides may use the same archetype, and a set should use at least 3 different ones.
-5. Call declare_plan once the composition plan is fixed and BEFORE the first add_slide, listing the screens in build order with a short name and role each. The editor shows these to the user while the screens are still empty, so the names should read like screen labels ("Hero", "Ritual"), not sentences.
-6. Build each slide following its archetype - emit its full planned composition as ONE batched turn (see "Batch your tool calls") - then run the verify routine below before moving on to the next slide.`
+4. In your FIRST tool turn, call declare_plan and add_slides together, in that order and exactly once each. Their screen lists must match. add_slides creates every planned screen at once and returns all ids in build order.
+5. In the next turn, build using those returned ids. Emit each slide's full planned composition as ONE batched turn (see "Batch your tool calls"), then run the verify routine before moving on.`
   const layoutContext = targetSlideId
     ? 'Use these archetypes only as optional composition references when the requested edit calls for layout changes. Do not force a new archetype onto an otherwise focused edit.'
     : `STORY ARC - assign each slide a role before assigning it an archetype:
@@ -36,8 +35,8 @@ export function buildInstructions(options: AiPromptOptions = {}): string {
 - Then one core feature per slide, most important first. Never join two features on one slide.
 - In sets of 5+ slides, place a trust or identity moment near the end ("made for people who ...") - the PROOF archetype fits it - and consider closing with a feature wall: a device-free slide stacking short feature labels as big type or pills, so the set ends on breadth instead of one more single-feature hero. At least one slide in a longer set should carry no device at all.`
   const finalReview = targetSlideId
-    ? `After the edit, render slide "${targetSlideId}" once more and fix only clear defects you can actually see in the image.`
-    : 'After the LAST slide, do one final pass: request render_slide_preview for EVERY slide together in one batched turn, then fix only clear defects you can actually see in the images.'
+    ? `The last preview of slide "${targetSlideId}" after your edit is the final review. Do not request another image if nothing changed after it.`
+    : 'After the LAST slide, do not re-render screens that already passed their preview. Their latest previews remain in the conversation; request another preview only if a later change affected that screen.'
   const consistency = targetSlideId
     ? 'Keep the screen consistent with its existing visual system unless the user explicitly requests a redesign.'
     : 'Consistency lives in the SYSTEM, not in repeating one layout. Across every slide keep the same palette, the same font pairing, the same accent color, the same highlight treatment, the same device screenTheme, and a consistent shape vocabulary - while the composition changes from slide to slide via the archetypes.'
@@ -50,6 +49,9 @@ export function buildInstructions(options: AiPromptOptions = {}): string {
   const assetRule = targetSlideId
     ? 'Use newly uploaded screenshot assets only when they are relevant to the requested edit. No screenshot upload is required.'
     : 'Use every screenshot asset the user provided at least once, wherever it makes sense in the story. Treat the logo asset separately from screenshots as described under branding.'
+  const assetIdSources = targetSlideId
+    ? 'get_canvas_state, ids returned by tools, or ids given in the user message'
+    : 'the user message or ids returned by tools'
   const finish = targetSlideId
     ? 'Once you are done, reply in English with a short 1-2 sentence summary of what you changed. Plain prose, no markdown, no lists.'
     : 'Once you are done building slides, reply in English with a short 2-3 sentence summary of the design concept you created. Plain prose, no markdown, no lists.'
@@ -116,8 +118,8 @@ ${process}
 Every turn of yours is a full model round trip - the slowest and most expensive unit of this job. Never add one element per turn. Request every tool call whose inputs you already know TOGETHER in one turn:
 - Build a whole slide in one turn: set_slide_background plus every add_* call of its planned composition. Calls execute in the order you list them and paint order follows that order, so list background shapes first, then devices, then icons and text.
 - Batch each repair round: every update_element fix plus the follow-up render_slide_preview in the same turn - the preview runs after the fixes and shows the repaired slide.
-- Split turns only when a later call genuinely depends on an earlier call's result: a new slide's id from add_slide, a generated asset id, or a measurement you must read before deciding a fix.
-- Mutation results already return the element's box and the slide's warnings, so inspect_slide is almost never worth its own turn.
+- Split turns only when a later call genuinely depends on an earlier result: the ids returned by add_slides, a generated asset id, or a measurement you must read before deciding a fix.
+- Mutation results return the changed element's box and warnings involving that element. render_slide_preview returns the final slide-wide warnings, so inspect_slide is almost never worth its own turn.
 
 ## Layout archetypes
 Coordinates are proven starting points - adapt them to the content, don't treat them as law.
@@ -147,7 +149,7 @@ Write each headline as one of three types:
 Weak copy names features; strong copy names benefits: "Track habits and stay motivated" -> "Keep your streak alive". "Organize tasks with AI summaries" -> "Turn notes into next steps". "Save recipes with tags and favorites" -> "Find dinner fast".
 
 ## Verify your work
-Every mutating tool (add_text, add_device, add_shape, add_image, set_device_screenshot, update_element) returns the element's real rendered bounding box plus slide-wide layout warnings. Read them after every call - they describe the actual rendered layout, not your guess at it.
+Every mutating tool (add_text, add_device, add_shape, add_image, set_device_screenshot, update_element) returns the element's real rendered bounding box plus warnings involving that element. Read them after every call; render_slide_preview supplies the deduplicated slide-wide warnings.
 
 Treat warnings as evidence, not commands:
 - Real defects - fix immediately: text clipped by a canvas edge (it will be cut off in export), text overlapping other text, collisions your archetype did not intend, unreadable contrast, a device cropped so hard that its focal screen content is cut off (see the bleed rule under Canvas), and a composition that leaves a large contiguous zone of the canvas (roughly a quarter or more) as bare background (see FILL THE FRAME under the archetypes).
@@ -203,7 +205,7 @@ ${assetRule}
 Write all on-canvas copy (headlines, supporting text, labels) in English, regardless of the language used in the user's request.
 
 ## Assets
-Only ever reference asset ids that actually exist (from get_canvas_state, ids returned by tools, or the ids given to you in the user message). Never invent an asset id.
+Only reference asset ids that actually exist (from ${assetIdSources}). Never invent an asset id.
 ${overlayAssetsSection}
 ## Finish
 ${finish}`

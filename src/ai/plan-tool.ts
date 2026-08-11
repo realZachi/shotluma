@@ -10,12 +10,12 @@ import type { ToolContext } from './tool-context'
  */
 export const createDeclarePlanTool = ({ emit }: ToolContext) => tool({
   description:
-    'Announce the screen set you are about to build, once the art direction is fixed and before the first add_slide. Call this exactly once per run. It only reports intent to the editor UI — it creates nothing.',
+    'Announce the planned screen set. Call exactly once, immediately before add_slides in the same tool turn. It reports intent to the editor UI and creates nothing.',
   inputSchema: z.object({
     screens: z.array(z.object({
       name: z.string().describe('Short screen name shown in the editor, e.g. "Hero" or "Ritual". Max 40 characters.'),
       role: z.string().describe('The job this screen does in the story arc, in a few words, e.g. "strongest benefit".'),
-    })).min(1).max(12).describe('The screens in build order, one entry per screen you intend to create.'),
+    })).min(1).max(8).describe('The screens in build order, one entry per screen you intend to create.'),
   }),
   execute: async ({ screens }) => {
     const planned = parsePlanInput({ screens })

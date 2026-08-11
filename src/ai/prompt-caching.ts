@@ -3,7 +3,7 @@ import {
   type AiModelSelection,
   type AiSdkReasoningEffort,
 } from './provider-catalog'
-import type { ModelMessage } from 'ai'
+import type { ModelMessage, SystemModelMessage } from 'ai'
 
 /**
  * Options spread into `streamText`: the catalog's reasoning-effort mapping plus
@@ -13,7 +13,11 @@ import type { ModelMessage } from 'ai'
 export type AiStreamRequestOptions = {
   reasoning?: AiSdkReasoningEffort
   providerOptions?: {
-    openai?: { reasoningEffort?: 'max'; promptCacheKey?: string }
+    openai?: {
+      reasoningEffort?: 'max'
+      promptCacheKey?: string
+      promptCacheOptions?: { mode: 'implicit'; ttl: '30m' }
+    }
     google?: { thinkingConfig: { includeThoughts: true } }
   }
 }
@@ -37,10 +41,14 @@ export type AiStreamRequestOptions = {
 const GOOGLE_THOUGHT_OPTIONS = { thinkingConfig: { includeThoughts: true } } as const
 
 /**
- * Combine the reasoning-effort options with an OpenAI `promptCacheKey`.
+ * Combine the reasoning-effort options with OpenAI's request-wide cache
+ * routing. Implicit mode intentionally stays enabled: its moving breakpoint
+ * caches the growing tool loop, while the explicit instruction breakpoint
+ * added below also preserves the stable cross-run prefix.
  *
  * OpenAI recommends an explicit `prompt_cache_key` for reliable prefix-cache
- * routing; one key per run keeps every step of the tool loop on the same cache.
+ * routing; one browser-session key per prompt variant keeps related runs on the
+ * same cache while naturally sharding traffic across clients.
  * The key is only sent to OpenAI itself — Moonshot shares the OpenAI-compat
  * `reasoningEffort` namespace but its API does not document the cache field.
  */
@@ -67,24 +75,69 @@ export const buildStreamRequestOptions = (
     ...(reasoningOptions && 'reasoning' in reasoningOptions
       ? { reasoning: reasoningOptions.reasoning }
       : {}),
-    providerOptions: { openai: { ...openaiReasoning, promptCacheKey } },
+    providerOptions: {
+      openai: {
+        ...openaiReasoning,
+        promptCacheKey,
+        promptCacheOptions: { mode: 'implicit', ttl: '30m' },
+      },
+    },
   }
 }
 
-const ANTHROPIC_OPTIONS_KEY = 'anthropic'
+type ExplicitCacheProvider = 'anthropic' | 'alibaba'
 
-const stripAnthropicCacheControl = (message: ModelMessage): ModelMessage => {
-  const anthropicOptions = message.providerOptions?.[ANTHROPIC_OPTIONS_KEY]
-  if (!anthropicOptions || !('cacheControl' in anthropicOptions)) return message
+const instructionProviderOptions = (
+  provider: AiModelSelection['provider'],
+): SystemModelMessage['providerOptions'] | undefined => {
+  if (provider === 'openai') {
+    return {
+      openai: { promptCacheBreakpoint: { mode: 'explicit' } },
+    }
+  }
+  if (provider === 'anthropic') {
+    return {
+      anthropic: { cacheControl: { type: 'ephemeral' } },
+    }
+  }
+  if (provider === 'qwen') {
+    return {
+      alibaba: { cacheControl: { type: 'ephemeral' } },
+    }
+  }
+  return undefined
+}
+
+/**
+ * Mark the end of the static instructions for providers with explicit cache
+ * controls. Tool definitions precede system instructions in Anthropic and
+ * Alibaba prompts, so their marker caches both. OpenAI also keeps its implicit
+ * moving breakpoint for the append-only tool loop.
+ */
+export const withStaticInstructionCacheBreakpoint = (
+  instructions: string,
+  provider: AiModelSelection['provider'],
+): string | SystemModelMessage => {
+  const providerOptions = instructionProviderOptions(provider)
+  if (!providerOptions) return instructions
+  return { role: 'system', content: instructions, providerOptions }
+}
+
+const stripCacheControl = (
+  message: ModelMessage,
+  provider: ExplicitCacheProvider,
+): ModelMessage => {
+  const cacheOptions = message.providerOptions?.[provider]
+  if (!cacheOptions || !('cacheControl' in cacheOptions)) return message
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { cacheControl, ...remainingAnthropic } = anthropicOptions
+  const { cacheControl, ...remainingOptions } = cacheOptions
   const providerOptions = { ...message.providerOptions }
-  if (Object.keys(remainingAnthropic).length > 0) {
-    providerOptions[ANTHROPIC_OPTIONS_KEY] = remainingAnthropic
+  if (Object.keys(remainingOptions).length > 0) {
+    providerOptions[provider] = remainingOptions
   } else {
     // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-    delete providerOptions[ANTHROPIC_OPTIONS_KEY]
+    delete providerOptions[provider]
   }
   if (Object.keys(providerOptions).length === 0) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -94,12 +147,15 @@ const stripAnthropicCacheControl = (message: ModelMessage): ModelMessage => {
   return { ...message, providerOptions }
 }
 
-const withCacheBreakpoint = (message: ModelMessage): ModelMessage => ({
+const withCacheBreakpoint = (
+  message: ModelMessage,
+  provider: ExplicitCacheProvider,
+): ModelMessage => ({
   ...message,
   providerOptions: {
     ...message.providerOptions,
-    [ANTHROPIC_OPTIONS_KEY]: {
-      ...message.providerOptions?.[ANTHROPIC_OPTIONS_KEY],
+    [provider]: {
+      ...message.providerOptions?.[provider],
       cacheControl: { type: 'ephemeral' },
     },
   },
@@ -116,10 +172,15 @@ const withCacheBreakpoint = (message: ModelMessage): ModelMessage => ({
  * forward, and Anthropic rejects requests with more than 4 breakpoints. Only the
  * `cacheControl` key is touched; other provider options survive untouched.
  */
-export const withMovingAnthropicCacheBreakpoint = (
+export const withMovingCacheBreakpoint = (
   messages: ModelMessage[],
+  provider: ExplicitCacheProvider,
 ): ModelMessage[] =>
   messages.map((message, index) =>
     index === messages.length - 1
-      ? withCacheBreakpoint(message)
-      : stripAnthropicCacheControl(message))
+      ? withCacheBreakpoint(message, provider)
+      : stripCacheControl(message, provider))
+
+export const withMovingAnthropicCacheBreakpoint = (
+  messages: ModelMessage[],
+): ModelMessage[] => withMovingCacheBreakpoint(messages, 'anthropic')

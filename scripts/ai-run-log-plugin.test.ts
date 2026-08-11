@@ -17,6 +17,20 @@ const report: AiRunReport = {
     detail: 'Layout measured',
     offsetMs: 25,
   }],
+  steps: [{
+    usage: {
+      inputTokens: 100,
+      outputTokens: 20,
+      totalTokens: 120,
+      textTokens: 15,
+      reasoningTokens: 5,
+      noCacheTokens: 100,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    },
+    toolCallCount: 1,
+    previewCount: 0,
+  }],
   slidesCreated: 1,
   usage: {
     inputTokens: 100,

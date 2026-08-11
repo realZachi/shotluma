@@ -27,30 +27,38 @@ export function createEditorTools(
   options?: EditorToolOptions,
 ) {
   const context = createToolContext(controller, options?.onActivity)
+  const mode = options?.mode ?? 'generate'
+  const inspectionTools = createInspectionTools(context, { mode })
   const {
-    add_slide: addSlide,
+    get_canvas_state: getCanvasState,
+    add_slides: addSlides,
     delete_slide: deleteSlide,
-    ...editableSlideTools
+    ...sharedSlideTools
   } = createSlideTools(context)
   const overlayTools = options?.enableOverlayAssets
     ? createOverlayAssetTools(context, {
         ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
       })
     : {}
-  const editTools = {
-    ...editableSlideTools,
+  const sharedTools = {
+    ...sharedSlideTools,
     add_text: createAddTextTool(context),
     add_icon: createAddIconTool(context),
     ...createMediaTools(context),
     update_element: createUpdateElementTool(context),
-    ...createInspectionTools(context),
+    ...inspectionTools,
     ...overlayTools,
   }
 
-  if (options?.mode === 'edit') return editTools
+  if (mode === 'edit') {
+    return {
+      get_canvas_state: getCanvasState,
+      ...sharedTools,
+    }
+  }
   return {
-    ...editTools,
-    add_slide: addSlide,
+    ...sharedTools,
+    add_slides: addSlides,
     delete_slide: deleteSlide,
     declare_plan: createDeclarePlanTool(context),
   }

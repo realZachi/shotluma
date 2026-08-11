@@ -36,6 +36,11 @@ const completedReport: AiRunReport = {
     detail: 'Layout measured',
     offsetMs: 125,
   }],
+  steps: [{
+    usage: toAiRunTokenUsage(sdkUsage),
+    toolCallCount: 1,
+    previewCount: 0,
+  }],
   slidesCreated: 3,
   usage: toAiRunTokenUsage(sdkUsage),
   finishReason: 'stop',
@@ -86,6 +91,7 @@ describe('AI run logs', () => {
       },
       outcome: 'completed',
       finishReason: 'stop',
+      steps: [{ toolCallCount: 1, previewCount: 0 }],
     })
     expect(JSON.stringify(log)).not.toContain('data:image')
     expect(JSON.stringify(log)).not.toContain('providerRequestId')
@@ -129,7 +135,7 @@ describe('AI run logs', () => {
 
     expect(normalizeAiRunLog(JSON.parse(JSON.stringify(validLog)))).toEqual(validLog)
     expect(normalizeAiRunLog(null)).toBeNull()
-    expect(normalizeAiRunLog({ ...validLog, schemaVersion: 2 })).toBeNull()
+    expect(normalizeAiRunLog({ ...validLog, schemaVersion: 1 })).toBeNull()
     expect(normalizeAiRunLog({ ...validLog, provider: 'unknown' })).toBeNull()
     expect(normalizeAiRunLog({ ...validLog, startedAt: 'not-a-date' })).toBeNull()
     expect(normalizeAiRunLog({
@@ -139,6 +145,10 @@ describe('AI run logs', () => {
     expect(normalizeAiRunLog({
       ...validLog,
       toolCalls: [{ name: 'inspect_slide', detail: 'Layout measured', offsetMs: -1 }],
+    })).toBeNull()
+    expect(normalizeAiRunLog({
+      ...validLog,
+      steps: [{ ...validLog.steps[0], previewCount: -1 }],
     })).toBeNull()
     expect(normalizeAiRunLog({
       ...validLog,

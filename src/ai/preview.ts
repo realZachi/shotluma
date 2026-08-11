@@ -5,6 +5,9 @@ import { settleFrames } from './measure'
 // so compute it once per module and reuse it for every preview capture across the whole AI run.
 let fontEmbedCSSPromise: Promise<string | undefined> | null = null
 
+export const AI_PREVIEW_WIDTH = 330
+export const AI_PREVIEW_HEIGHT = 715
+
 const getCachedFontEmbedCSS = (node: HTMLElement): Promise<string | undefined> => {
   fontEmbedCSSPromise ??= getFontEmbedCSS(node).catch((error: unknown) => {
     console.warn('Failed to compute font embed CSS for slide preview capture', error)
@@ -21,8 +24,10 @@ export async function captureSlidePreview(slideId: string): Promise<{ base64: st
   try {
     const fontEmbedCSS = await getCachedFontEmbedCSS(node)
     const dataUrl = await toJpeg(node, {
-      canvasWidth: 430,
-      canvasHeight: 932,
+      // The editor's source artboard is 330px wide. Capturing above that merely
+      // upscales the same layout and adds vision tokens without new information.
+      canvasWidth: AI_PREVIEW_WIDTH,
+      canvasHeight: AI_PREVIEW_HEIGHT,
       pixelRatio: 1,
       quality: 0.8,
       ...(fontEmbedCSS ? { fontEmbedCSS } : {}),
