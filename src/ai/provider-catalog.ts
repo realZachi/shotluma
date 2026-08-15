@@ -7,6 +7,8 @@ export type AiProviderId =
   | 'anthropic'
   | 'xai'
   | 'openrouter'
+  | 'opencode-zen'
+  | 'opencode-go'
 
 export type AiReasoningEffort =
   | 'minimal'
@@ -23,6 +25,7 @@ export type AiModelSelection = {
   provider: AiProviderId
   model: string
   reasoningEffort?: AiReasoningEffort
+  visionModel?: string
 }
 
 export type AiModelOption = {
@@ -31,6 +34,13 @@ export type AiModelOption = {
   label: string
   description: string
   reasoningEfforts?: readonly AiReasoningEffort[]
+  /** Omitted means the model accepts image input natively. */
+  supportsVision?: boolean
+}
+
+export type AiProviderKeyGroup = {
+  id: string
+  label: string
 }
 
 export type AiProviderOption = {
@@ -40,7 +50,11 @@ export type AiProviderOption = {
   auth: 'apiKey' | 'chatgpt'
   transport: 'bridge' | 'direct' | 'proxy'
   models: readonly AiModelOption[]
+  keyGroup?: AiProviderKeyGroup
 }
+
+export const modelSupportsVision = (model: AiModelOption): boolean =>
+  model.supportsVision !== false
 
 export const DEFAULT_AI_REASONING_EFFORT = 'high' as const satisfies AiReasoningEffort
 
@@ -313,6 +327,86 @@ export const AI_PROVIDERS: readonly AiProviderOption[] = [
       },
     ],
   },
+  {
+    id: 'opencode-zen',
+    label: 'OpenCode Zen',
+    envVar: 'VITE_OPENCODE_API_KEY',
+    auth: 'apiKey',
+    transport: 'proxy',
+    keyGroup: { id: 'opencode', label: 'OpenCode' },
+    // Curated recommendations; the full tools catalog is fetched at runtime
+    // (src/ai/opencode-models.ts) and this list doubles as the offline fallback.
+    models: [
+      {
+        id: 'opencode-zen/gpt-5.6-terra',
+        providerModelId: 'gpt-5.6-terra',
+        label: 'GPT 5.6 Terra',
+        description: 'Recommended · vision and tools',
+        reasoningEfforts: OPENROUTER_REASONING_EFFORTS,
+      },
+      {
+        id: 'opencode-zen/claude-sonnet-5',
+        providerModelId: 'claude-sonnet-5',
+        label: 'Claude Sonnet 5',
+        description: 'Balanced quality and cost',
+        reasoningEfforts: OPENROUTER_REASONING_EFFORTS,
+      },
+      {
+        id: 'opencode-zen/kimi-k3',
+        providerModelId: 'kimi-k3',
+        label: 'Kimi K3',
+        description: 'Open coding model with vision',
+        reasoningEfforts: OPENROUTER_REASONING_EFFORTS,
+      },
+      {
+        id: 'opencode-zen/glm-5.2',
+        providerModelId: 'glm-5.2',
+        label: 'GLM 5.2',
+        description: 'No native vision · a vision model describes images first',
+        reasoningEfforts: OPENROUTER_REASONING_EFFORTS,
+        supportsVision: false,
+      },
+    ],
+  },
+  {
+    id: 'opencode-go',
+    label: 'OpenCode Go',
+    envVar: 'VITE_OPENCODE_API_KEY',
+    auth: 'apiKey',
+    transport: 'proxy',
+    keyGroup: { id: 'opencode', label: 'OpenCode' },
+    models: [
+      {
+        id: 'opencode-go/gpt-5.6-luna',
+        providerModelId: 'gpt-5.6-luna',
+        label: 'GPT 5.6 Luna',
+        description: 'Recommended · vision and tools',
+        reasoningEfforts: OPENROUTER_REASONING_EFFORTS,
+      },
+      {
+        id: 'opencode-go/kimi-k3',
+        providerModelId: 'kimi-k3',
+        label: 'Kimi K3',
+        description: 'Open coding model with vision',
+        reasoningEfforts: OPENROUTER_REASONING_EFFORTS,
+      },
+      {
+        id: 'opencode-go/mimo-v2.5',
+        providerModelId: 'mimo-v2.5',
+        label: 'MiMo V2.5',
+        description: 'Fast open model with vision',
+        reasoningEfforts: OPENROUTER_REASONING_EFFORTS,
+      },
+      {
+        id: 'opencode-go/glm-5.3',
+        providerModelId: 'glm-5.3',
+        label: 'GLM 5.3',
+        description: 'No native vision · a vision model describes images first',
+        reasoningEfforts: OPENROUTER_REASONING_EFFORTS,
+        supportsVision: false,
+      },
+    ],
+  },
 ]
 
 export const DEFAULT_AI_SELECTION: AiModelSelection = {
@@ -324,36 +418,92 @@ export const DEFAULT_AI_SELECTION: AiModelSelection = {
 export const isAiProviderId = (value: unknown): value is AiProviderId =>
   typeof value === 'string' && AI_PROVIDERS.some((provider) => provider.id === value)
 
+export type AiProviderKeyField = {
+  id: string
+  label: string
+  envVar: string
+  providerIds: readonly AiProviderId[]
+}
+
+/** One API-key field per credential, sharing Zen/Go under a single OpenCode key. */
+export const getAiProviderKeyFields = (): readonly AiProviderKeyField[] => {
+  const fields: AiProviderKeyField[] = []
+  const indexById = new Map<string, number>()
+  for (const provider of AI_PROVIDERS) {
+    if (provider.auth !== 'apiKey') continue
+    const id = provider.keyGroup?.id ?? provider.id
+    const existingIndex = indexById.get(id)
+    if (existingIndex !== undefined) {
+      const existing = fields[existingIndex]
+      if (!existing) continue
+      fields[existingIndex] = {
+        ...existing,
+        providerIds: [...existing.providerIds, provider.id],
+      }
+      continue
+    }
+    indexById.set(id, fields.length)
+    fields.push({
+      id,
+      label: provider.keyGroup?.label ?? provider.label,
+      envVar: provider.envVar,
+      providerIds: [provider.id],
+    })
+  }
+  return fields
+}
+
 /**
- * OpenRouter models discovered at runtime (src/ai/openrouter-models.ts).
- * Registered here so catalog lookups resolve dynamic selections; the static
- * catalog stays the source of truth for every other provider.
+ * Runtime catalogs (OpenRouter, OpenCode Zen/Go) register here so lookups
+ * resolve dynamic selections. The static catalog stays the fallback.
  */
-let dynamicOpenRouterModels: readonly AiModelOption[] = []
+const DYNAMIC_CATALOG_PROVIDERS = new Set<AiProviderId>([
+  'openrouter',
+  'opencode-zen',
+  'opencode-go',
+])
+
+const dynamicModelsByProvider: Partial<Record<AiProviderId, readonly AiModelOption[]>> = {}
+
+export const setDynamicProviderModels = (
+  providerId: AiProviderId,
+  models: readonly AiModelOption[],
+): void => {
+  dynamicModelsByProvider[providerId] = models
+}
+
+export const getDynamicProviderModels = (
+  providerId: AiProviderId,
+): readonly AiModelOption[] =>
+  dynamicModelsByProvider[providerId] ?? []
 
 export const setDynamicOpenRouterModels = (
   models: readonly AiModelOption[],
 ): void => {
-  dynamicOpenRouterModels = models
+  setDynamicProviderModels('openrouter', models)
 }
 
 export const getDynamicOpenRouterModels = (): readonly AiModelOption[] =>
-  dynamicOpenRouterModels
+  getDynamicProviderModels('openrouter')
 
-const findOpenRouterModel = (modelId: string): AiModelOption | undefined =>
-  getAiProvider('openrouter').models.find((option) => option.id === modelId)
-  ?? dynamicOpenRouterModels.find((option) => option.id === modelId)
+const findDynamicCatalogModel = (
+  providerId: AiProviderId,
+  modelId: string,
+): AiModelOption | undefined =>
+  getAiProvider(providerId).models.find((option) => option.id === modelId)
+  ?? getDynamicProviderModels(providerId).find((option) => option.id === modelId)
 
-/**
- * A dynamic selection may outlive the fetched catalog (e.g. the model list is
- * still loading); synthesize a minimal option so lookups never throw for the
- * dynamic provider. Reasoning support is unknown, so no effort is offered.
- */
-const synthesizeOpenRouterModel = (modelId: string): AiModelOption => ({
+const synthesizeDynamicCatalogModel = (
+  providerId: AiProviderId,
+  modelId: string,
+): AiModelOption => ({
   id: modelId,
   label: modelId,
-  description: 'OpenRouter model',
+  description: `${getAiProvider(providerId).label} model`,
 })
+
+export const isDynamicCatalogProvider = (providerId: AiProviderId): boolean =>
+  DYNAMIC_CATALOG_PROVIDERS.has(providerId)
 
 export const getAiProvider = (providerId: AiProviderId): AiProviderOption => {
   const provider = AI_PROVIDERS.find((option) => option.id === providerId)
@@ -368,9 +518,9 @@ export const getDefaultAiModel = (providerId: AiProviderId): AiModelOption => {
 }
 
 export const getAiModel = (selection: AiModelSelection): AiModelOption => {
-  if (selection.provider === 'openrouter') {
-    return findOpenRouterModel(selection.model)
-      ?? synthesizeOpenRouterModel(selection.model)
+  if (isDynamicCatalogProvider(selection.provider)) {
+    return findDynamicCatalogModel(selection.provider, selection.model)
+      ?? synthesizeDynamicCatalogModel(selection.provider, selection.model)
   }
   const model = getAiProvider(selection.provider).models.find(
     (option) => option.id === selection.model,
@@ -388,9 +538,13 @@ export const findAiModelById = (
     const model = provider.models.find((option) => option.id === modelId)
     if (model) return { provider, model }
   }
-  const dynamicModel = dynamicOpenRouterModels.find((option) => option.id === modelId)
-  if (dynamicModel) {
-    return { provider: getAiProvider('openrouter'), model: dynamicModel }
+  for (const providerId of DYNAMIC_CATALOG_PROVIDERS) {
+    const dynamicModel = getDynamicProviderModels(providerId).find(
+      (option) => option.id === modelId,
+    )
+    if (dynamicModel) {
+      return { provider: getAiProvider(providerId), model: dynamicModel }
+    }
   }
   throw new Error(`Unknown AI model: ${modelId}`)
 }

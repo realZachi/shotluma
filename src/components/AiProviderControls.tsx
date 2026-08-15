@@ -1,4 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import {
+  isOpencodeProviderId,
+  listOpencodeVisionModels,
+  loadAllOpencodeModels,
+  loadOpencodeModels,
+  pickOpencodeVisionModel,
+  type OpencodeProviderId,
+} from '../ai/opencode-models'
+import { loadOpenRouterModels } from '../ai/openrouter-models'
 import {
   AI_PROVIDERS,
   AI_REASONING_EFFORT_LABELS,
@@ -6,11 +15,16 @@ import {
   findAiModelById,
   getAiModel,
   getAiProvider,
+  getDynamicProviderModels,
+  modelSupportsVision,
+  type AiModelOption,
   type AiModelSelection,
   type AiProviderId,
+  type AiProviderOption,
   type AiReasoningEffort,
 } from '../ai/provider-catalog'
 import {
+  AiGenerative,
   AiNetwork,
   AlertCircle,
   ChatGpt,
@@ -21,7 +35,7 @@ import {
   KimiAi,
   Qwen,
 } from './icons'
-import { OpenRouterModelBrowser } from './OpenRouterModelBrowser'
+import { AiCatalogModelBrowser } from './OpenRouterModelBrowser'
 import { Button } from './ui/button'
 import {
   Popover,
@@ -45,7 +59,24 @@ import type { ComponentType } from 'react'
  * browser instead of selecting a model. Real OpenRouter ids use `vendor/model`,
  * so the `:` namespace cannot collide.
  */
-const OPENROUTER_BROWSE_VALUE = 'openrouter:browse-all'
+const CATALOG_BROWSE_SUFFIX = ':browse-all'
+
+const catalogBrowseValue = (providerId: AiProviderId): string =>
+  `${providerId}${CATALOG_BROWSE_SUFFIX}`
+
+const catalogProviderFromBrowseValue = (value: string): AiProviderId | null => {
+  if (!value.endsWith(CATALOG_BROWSE_SUFFIX)) return null
+  const providerId = value.slice(0, -CATALOG_BROWSE_SUFFIX.length)
+  return AI_PROVIDERS.some((provider) => provider.id === providerId)
+    ? providerId as AiProviderId
+    : null
+}
+
+const CATALOG_BROWSE_PROVIDERS = new Set<AiProviderId>([
+  'openrouter',
+  'opencode-zen',
+  'opencode-go',
+])
 
 const AI_PROVIDER_ICONS: Record<AiProviderId, ComponentType<{ className?: string; size?: number }>> = {
   codex: ChatGpt,
@@ -56,6 +87,8 @@ const AI_PROVIDER_ICONS: Record<AiProviderId, ComponentType<{ className?: string
   anthropic: Claude,
   xai: Grok,
   openrouter: AiNetwork,
+  'opencode-zen': AiGenerative,
+  'opencode-go': AiGenerative,
 }
 
 export type AiProviderControlsProps = {
@@ -64,6 +97,7 @@ export type AiProviderControlsProps = {
   transportAvailability: AiProviderAvailability
   onModelSelect: (providerId: AiProviderId, modelId: string) => void
   onReasoningEffortChange: (reasoningEffort: AiReasoningEffort) => void
+  onVisionModelChange: (visionModel: string) => void
   onManageKeys: (providerId: AiProviderId) => void
   onConnectCodex: () => void
 }
@@ -76,22 +110,184 @@ const triggerLabel = (
   return `${modelLabel} · ${AI_REASONING_EFFORT_LABELS[reasoningEffort]}`
 }
 
+const uniqueVisionModels = (providerId: OpencodeProviderId): AiModelOption[] => {
+  const models = [
+    ...getAiProvider(providerId).models,
+    ...getDynamicProviderModels(providerId),
+  ]
+  const seen = new Set<string>()
+  return listOpencodeVisionModels(models).filter((model) => {
+    if (seen.has(model.id)) return false
+    seen.add(model.id)
+    return true
+  })
+}
+
+const providerGroupCaption = (
+  option: AiProviderOption,
+  availability: AiProviderAvailability,
+  transportAvailability: AiProviderAvailability,
+): string => {
+  if (availability[option.id]) return option.label
+  if (option.id === 'codex') return `${option.label} · connect`
+  if (transportAvailability[option.id]) return `${option.label} · key missing`
+  return `${option.label} · local proxy unavailable`
+}
+
+const CatalogModelBrowsers = ({
+  browsingProvider,
+  selectedModelId,
+  onModelSelect,
+}: {
+  browsingProvider: AiProviderId | null
+  selectedModelId: string
+  onModelSelect: (providerId: AiProviderId, modelId: string) => void
+}) => {
+  if (browsingProvider === 'openrouter') {
+    return (
+      <AiCatalogModelBrowser
+        heading="All OpenRouter models"
+        selectedModelId={selectedModelId}
+        loadModels={loadOpenRouterModels}
+        onModelSelect={(modelId) => onModelSelect('openrouter', modelId)}
+      />
+    )
+  }
+  if (!isOpencodeProviderId(browsingProvider)) return null
+  return (
+    <AiCatalogModelBrowser
+      heading={`All ${getAiProvider(browsingProvider).label} models`}
+      selectedModelId={selectedModelId}
+      loadModels={() => loadOpencodeModels(browsingProvider)}
+      onModelSelect={(modelId) => onModelSelect(browsingProvider, modelId)}
+    />
+  )
+}
+
+const VisionFallbackPicker = ({
+  codingModelLabel,
+  visionModel,
+  visionModels,
+  onVisionModelChange,
+}: {
+  codingModelLabel: string
+  visionModel: AiModelOption
+  visionModels: readonly AiModelOption[]
+  onVisionModelChange: (visionModel: string) => void
+}) => (
+  <div className="ai-model-picker-section">
+    <span className="ai-model-picker-section__label" id="ai-vision-label">
+      Vision fallback
+    </span>
+    <Select
+      value={visionModel.id}
+      onValueChange={(value) => {
+        if (typeof value === 'string') onVisionModelChange(value)
+      }}
+    >
+      <SelectTrigger
+        id="ai-vision-trigger"
+        className="ai-provider-trigger"
+        aria-labelledby="ai-vision-label"
+        aria-label="Vision fallback model"
+      >
+        <SelectValue>
+          <span>{visionModel.label}</span>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent align="start" className="ai-modal-select-content">
+        {visionModels.map((option) => (
+          <SelectItem key={option.id} value={option.id}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+    <small className="ai-provider-description">
+      {codingModelLabel} cannot see images. {visionModel.label} will describe
+      screenshots and previews first.
+    </small>
+  </div>
+)
+
+const ProviderSetupWarning = ({
+  providerId,
+  keyLabel,
+  isTransportAvailable,
+  onManageKeys,
+  onConnectCodex,
+}: {
+  providerId: AiProviderId
+  keyLabel: string
+  isTransportAvailable: boolean
+  onManageKeys: (providerId: AiProviderId) => void
+  onConnectCodex: () => void
+}) => {
+  const isCodex = providerId === 'codex'
+  return (
+    <div className="ai-provider-warning" role="alert">
+      <AlertCircle size={15} />
+      <div className="ai-provider-warning-body">
+        <span>
+          {isCodex
+            ? <><b>Codex isn’t connected.</b> Use your ChatGPT plan without an API key.</>
+            : isTransportAvailable
+              ? <><b>API key missing.</b> Add your {keyLabel} key to generate with this model.</>
+              : <><b>Local proxy unavailable.</b> Moonshot can be used only from localhost.</>}
+        </span>
+        {(isCodex || isTransportAvailable) && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="ai-provider-warning-action"
+            onClick={() => {
+              if (isCodex) onConnectCodex()
+              else onManageKeys(providerId)
+            }}
+          >
+            {isCodex ? 'Connect Codex' : 'Enter API key'}
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export const AiProviderControls = ({
   selection,
   availability,
   transportAvailability,
   onModelSelect,
   onReasoningEffortChange,
+  onVisionModelChange,
   onManageKeys,
   onConnectCodex,
 }: AiProviderControlsProps) => {
-  const [isBrowsingOpenRouter, setBrowsingOpenRouter] = useState(false)
+  const [browsingProvider, setBrowsingProvider] = useState<AiProviderId | null>(null)
+  const [catalogRevision, setCatalogRevision] = useState(0)
   const provider = getAiProvider(selection.provider)
   const model = getAiModel(selection)
   const isConfigured = availability[selection.provider]
   const isTransportAvailable = transportAvailability[selection.provider]
   const reasoningEffort = clampAiReasoningEffort(model, selection.reasoningEffort)
   const SelectedIcon = AI_PROVIDER_ICONS[selection.provider]
+  const keyLabel = provider.keyGroup?.label ?? provider.label
+  const needsVisionFallback = isOpencodeProviderId(selection.provider)
+    && !modelSupportsVision(model)
+  void catalogRevision
+  const visionModels = isOpencodeProviderId(selection.provider)
+    ? uniqueVisionModels(selection.provider)
+    : []
+  const visionModel = needsVisionFallback && isOpencodeProviderId(selection.provider)
+    ? pickOpencodeVisionModel(selection.provider, visionModels, selection.visionModel)
+    : undefined
+
+  useEffect(() => {
+    void loadAllOpencodeModels().then(() => {
+      setCatalogRevision((current) => current + 1)
+    })
+  }, [])
 
   return (
     <Popover>
@@ -129,11 +325,12 @@ export const AiProviderControls = ({
             value={selection.model}
             onValueChange={(value) => {
               if (typeof value !== 'string') return
-              if (value === OPENROUTER_BROWSE_VALUE) {
-                setBrowsingOpenRouter(true)
+              const browseProvider = catalogProviderFromBrowseValue(value)
+              if (browseProvider) {
+                setBrowsingProvider(browseProvider)
                 return
               }
-              setBrowsingOpenRouter(false)
+              setBrowsingProvider(null)
               const match = findAiModelById(value)
               onModelSelect(match.provider.id, match.model.id)
             }}
@@ -156,13 +353,7 @@ export const AiProviderControls = ({
                     <SelectLabel>
                       <ProviderIcon className="ai-provider-icon" size={14} />
                       <span>
-                        {availability[option.id]
-                          ? option.label
-                          : option.id === 'codex'
-                            ? `${option.label} · connect`
-                            : transportAvailability[option.id]
-                              ? `${option.label} · key missing`
-                              : `${option.label} · local proxy unavailable`}
+                        {providerGroupCaption(option, availability, transportAvailability)}
                       </span>
                     </SelectLabel>
                     {option.models.map((modelOption) => (
@@ -170,8 +361,8 @@ export const AiProviderControls = ({
                         {modelOption.label}
                       </SelectItem>
                     ))}
-                    {option.id === 'openrouter' && (
-                      <SelectItem value={OPENROUTER_BROWSE_VALUE}>
+                    {CATALOG_BROWSE_PROVIDERS.has(option.id) && (
+                      <SelectItem value={catalogBrowseValue(option.id)}>
                         Other models…
                       </SelectItem>
                     )}
@@ -182,10 +373,18 @@ export const AiProviderControls = ({
           </Select>
         </div>
 
-        {isBrowsingOpenRouter && (
-          <OpenRouterModelBrowser
-            selectedModelId={selection.model}
-            onModelSelect={(modelId) => onModelSelect('openrouter', modelId)}
+        <CatalogModelBrowsers
+          browsingProvider={browsingProvider}
+          selectedModelId={selection.model}
+          onModelSelect={onModelSelect}
+        />
+
+        {needsVisionFallback && visionModel && (
+          <VisionFallbackPicker
+            codingModelLabel={model.label}
+            visionModel={visionModel}
+            visionModels={visionModels}
+            onVisionModelChange={onVisionModelChange}
           />
         )}
 
@@ -230,32 +429,13 @@ export const AiProviderControls = ({
         </div>
 
         {!isConfigured && (
-          <div className="ai-provider-warning" role="alert">
-            <AlertCircle size={15} />
-            <div className="ai-provider-warning-body">
-              <span>
-                {selection.provider === 'codex'
-                  ? <><b>Codex isn’t connected.</b> Use your ChatGPT plan without an API key.</>
-                  : isTransportAvailable
-                    ? <><b>API key missing.</b> Add your {provider.label} key to generate with this model.</>
-                    : <><b>Local proxy unavailable.</b> Moonshot can be used only from localhost.</>}
-              </span>
-              {(selection.provider === 'codex' || isTransportAvailable) && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="ai-provider-warning-action"
-                  onClick={() => {
-                    if (selection.provider === 'codex') onConnectCodex()
-                    else onManageKeys(selection.provider)
-                  }}
-                >
-                  {selection.provider === 'codex' ? 'Connect Codex' : 'Enter API key'}
-                </Button>
-              )}
-            </div>
-          </div>
+          <ProviderSetupWarning
+            providerId={selection.provider}
+            keyLabel={keyLabel}
+            isTransportAvailable={isTransportAvailable}
+            onManageKeys={onManageKeys}
+            onConnectCodex={onConnectCodex}
+          />
         )}
       </PopoverContent>
     </Popover>

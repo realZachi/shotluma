@@ -14,6 +14,16 @@ import { relayChatToolImages } from './chat-tool-images'
 import { runCodexAppServerGeneration } from './codex-app-server'
 import { readCodexConnection } from './codex-connection'
 import { scopeAiControllerToSlide, type AiEditorController } from './controller'
+import { collectMessageImages, describeMessageImages } from './describe-images'
+import {
+  createOpencodeChatModel,
+  createOpencodeImageDescriber,
+  opencodeRequestModelId,
+} from './opencode-client'
+import {
+  isOpencodeProviderId,
+  pickOpencodeVisionModel,
+} from './opencode-models'
 import { buildInstructions, buildUserMessage } from './prompt'
 import {
   buildStreamRequestOptions,
@@ -25,6 +35,8 @@ import {
   getAiModel,
   getAiProvider,
   getAiSdkReasoningEffort,
+  getDynamicProviderModels,
+  modelSupportsVision,
   type AiModelSelection,
 } from './provider-catalog'
 import {
@@ -157,6 +169,15 @@ const createAiModel = async (selection: AiModelSelection) => {
         },
       }).chat(selection.model)
     }
+    case 'opencode-zen':
+    case 'opencode-go': {
+      const model = getAiModel(selection)
+      return createOpencodeChatModel({
+        providerId: selection.provider,
+        modelId: opencodeRequestModelId(model.id, model.providerModelId),
+        apiKey,
+      })
+    }
   }
 }
 
@@ -286,7 +307,78 @@ const collectStreamPart = <TOOLS extends ToolSet>(options: {
  */
 export const NARRATION_WORD_DELAY_MS = 18
 
-export const narrationSmoothing = () => smoothStream<ToolSet>({ delayInMs: NARRATION_WORD_DELAY_MS })
+export const narrationSmoothing = () =>
+  smoothStream<ToolSet>({ delayInMs: NARRATION_WORD_DELAY_MS })
+
+const needsChatToolImageRelay = (provider: AiModelSelection['provider']): boolean =>
+  provider === 'moonshot'
+  || provider === 'openrouter'
+  || provider === 'qwen'
+  || isOpencodeProviderId(provider)
+
+const resolveOpencodeVisionDescriber = (options: {
+  selection: AiModelSelection
+  apiKey: string
+  signal?: AbortSignal
+}): {
+  describeImage: ReturnType<typeof createOpencodeImageDescriber>
+  visionLabel: string
+} | null => {
+  if (!isOpencodeProviderId(options.selection.provider)) return null
+  const model = getAiModel(options.selection)
+  if (modelSupportsVision(model)) return null
+  const catalog = [
+    ...getAiProvider(options.selection.provider).models,
+    ...getDynamicProviderModels(options.selection.provider),
+  ]
+  const vision = pickOpencodeVisionModel(
+    options.selection.provider,
+    catalog,
+    options.selection.visionModel,
+  )
+  if (!vision) {
+    throw new Error(
+      `${model.label} cannot see images, and no OpenCode vision model is available to describe them.`,
+    )
+  }
+  return {
+    visionLabel: vision.label,
+    describeImage: createOpencodeImageDescriber({
+      providerId: options.selection.provider,
+      visionModelId: opencodeRequestModelId(vision.id, vision.providerModelId),
+      apiKey: options.apiKey,
+      ...(options.signal ? { signal: options.signal } : {}),
+    }),
+  }
+}
+
+type OpencodeVisionFallback = NonNullable<
+  ReturnType<typeof resolveOpencodeVisionDescriber>
+>
+
+const prepareGenerationMessages = async (options: {
+  messages: ModelMessage[]
+  movingCacheProvider: 'anthropic' | 'alibaba' | null
+  needsChatImageRelay: boolean
+  visionFallback: OpencodeVisionFallback | null
+  onStatus?: (message: string) => void
+  visionAnnouncement: { sent: boolean }
+}): Promise<ModelMessage[]> => {
+  const relayed = options.needsChatImageRelay
+    ? relayChatToolImages(options.messages)
+    : options.messages
+  let next = relayed
+  if (options.visionFallback) {
+    if (!options.visionAnnouncement.sent && collectMessageImages(relayed).length > 0) {
+      options.visionAnnouncement.sent = true
+      options.onStatus?.(`Describing images with ${options.visionFallback.visionLabel}…`)
+    }
+    next = await describeMessageImages(relayed, options.visionFallback.describeImage)
+  }
+  return options.movingCacheProvider
+    ? withMovingCacheBreakpoint(next, options.movingCacheProvider)
+    : next
+}
 
 const openAiGenerationStream = (options: {
   model: Awaited<ReturnType<typeof createAiModel>>
@@ -298,6 +390,7 @@ const openAiGenerationStream = (options: {
   signal?: AbortSignal
   onActivity?: (activity: AiToolActivity) => void
   onStepUsage?: (usage: LanguageModelUsage, toolNames: string[]) => void
+  onStatus?: (message: string) => void
 }) => {
   const {
     model,
@@ -309,6 +402,7 @@ const openAiGenerationStream = (options: {
     signal,
     onActivity,
     onStepUsage,
+    onStatus,
   } = options
   const runController = targetSlideId
     ? scopeAiControllerToSlide(controller, targetSlideId)
@@ -328,9 +422,13 @@ const openAiGenerationStream = (options: {
   const movingCacheProvider = selection.provider === 'anthropic'
     ? 'anthropic'
     : selection.provider === 'qwen' ? 'alibaba' : null
-  const needsChatImageRelay = selection.provider === 'moonshot'
-    || selection.provider === 'openrouter'
-    || selection.provider === 'qwen'
+  const needsChatImageRelay = needsChatToolImageRelay(selection.provider)
+  const visionFallback = resolveOpencodeVisionDescriber({
+    selection,
+    apiKey: getAiProviderKey(selection.provider),
+    ...(signal ? { signal } : {}),
+  })
+  const visionAnnouncement = { sent: false }
 
   return streamText({
     model,
@@ -350,18 +448,18 @@ const openAiGenerationStream = (options: {
     ...requestOptions,
     // Anthropic and Alibaba require explicit message breakpoints. Keep one
     // moving forward so each step can reuse the growing tool-loop prefix.
-    ...(movingCacheProvider || needsChatImageRelay
+    ...(movingCacheProvider || needsChatImageRelay || visionFallback
       ? {
-          prepareStep: ({ messages }: { messages: ModelMessage[] }) => {
-            const relayed = needsChatImageRelay
-              ? relayChatToolImages(messages)
-              : messages
-            return {
-              messages: movingCacheProvider
-                ? withMovingCacheBreakpoint(relayed, movingCacheProvider)
-                : relayed,
-            }
-          },
+          prepareStep: async ({ messages }: { messages: ModelMessage[] }) => ({
+            messages: await prepareGenerationMessages({
+              messages,
+              movingCacheProvider,
+              needsChatImageRelay,
+              visionFallback,
+              ...(onStatus ? { onStatus } : {}),
+              visionAnnouncement,
+            }),
+          }),
         }
       : {}),
     ...(signal ? { abortSignal: signal } : {}),
@@ -468,6 +566,9 @@ const runDirectProviderGeneration = async (options: {
     ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
     ...(signal ? { signal } : {}),
     ...(onActivity ? { onActivity } : {}),
+    onStatus: (message) => {
+      onEvent({ type: 'status', message })
+    },
     onStepUsage: (usage, toolNames) => {
       accumulator.steps.push({
         usage: toAiRunTokenUsage(usage),

@@ -43,8 +43,9 @@ describe('AI provider configuration', () => {
       VITE_ANTHROPIC_API_KEY: 'anthropic-key',
       VITE_XAI_API_KEY: ' xai-key ',
       VITE_OPENROUTER_API_KEY: ' openrouter-key ',
+      VITE_OPENCODE_API_KEY: ' opencode-key ',
     })).toEqual({
-      codex: '',
+      ...createEmptyAiProviderKeys(),
       moonshot: 'moonshot-key',
       google: 'google-key',
       qwen: 'qwen-key',
@@ -52,6 +53,8 @@ describe('AI provider configuration', () => {
       anthropic: 'anthropic-key',
       xai: 'xai-key',
       openrouter: 'openrouter-key',
+      'opencode-zen': 'opencode-key',
+      'opencode-go': 'opencode-key',
     })
   })
 
@@ -63,14 +66,8 @@ describe('AI provider configuration', () => {
     })
 
     expect(keys).toEqual({
-      codex: '',
-      moonshot: '',
-      google: '',
-      qwen: '',
+      ...createEmptyAiProviderKeys(),
       openai: 'openai-key',
-      anthropic: '',
-      xai: '',
-      openrouter: '',
     })
     expect(getAiProviderAvailability(keys)).toEqual({
       codex: false,
@@ -81,6 +78,8 @@ describe('AI provider configuration', () => {
       anthropic: false,
       xai: false,
       openrouter: false,
+      'opencode-zen': false,
+      'opencode-go': false,
     })
   })
 
@@ -94,6 +93,8 @@ describe('AI provider configuration', () => {
       anthropic: true,
       xai: true,
       openrouter: true,
+      'opencode-zen': false,
+      'opencode-go': false,
     })).toEqual({
       provider: 'openai',
       model: 'gpt-5.6-terra',
@@ -108,6 +109,8 @@ describe('AI provider configuration', () => {
       anthropic: false,
       xai: false,
       openrouter: true,
+      'opencode-zen': false,
+      'opencode-go': false,
     })).toEqual({
       provider: 'openrouter',
       model: 'anthropic/claude-sonnet-5',
@@ -122,6 +125,8 @@ describe('AI provider configuration', () => {
       anthropic: false,
       xai: false,
       openrouter: false,
+      'opencode-zen': false,
+      'opencode-go': false,
     })).toEqual({
       provider: 'codex',
       model: 'codex/gpt-5.6-terra',
@@ -136,6 +141,8 @@ describe('AI provider configuration', () => {
       anthropic: false,
       xai: false,
       openrouter: false,
+      'opencode-zen': false,
+      'opencode-go': false,
     })).toEqual({
       provider: 'moonshot',
       model: 'kimi-k3',
@@ -154,14 +161,9 @@ describe('AI provider configuration', () => {
     }
 
     expect(mergeAiProviderKeys(environment, stored)).toEqual({
-      codex: '',
-      moonshot: '',
+      ...createEmptyAiProviderKeys(),
       google: 'env-google',
-      qwen: '',
       openai: 'browser-openai',
-      anthropic: '',
-      xai: '',
-      openrouter: '',
     })
   })
 
@@ -175,6 +177,13 @@ describe('AI provider configuration', () => {
     }))).toEqual({
       ...createEmptyAiProviderKeys(),
       openai: 'sk-test',
+    })
+    expect(parseStoredAiProviderKeys(JSON.stringify({
+      opencode: ' zen-go-key ',
+    }))).toEqual({
+      ...createEmptyAiProviderKeys(),
+      'opencode-zen': 'zen-go-key',
+      'opencode-go': 'zen-go-key',
     })
 
     const storage = createMemoryStorage()
@@ -238,6 +247,8 @@ describe('AI provider configuration', () => {
     expect(isLocalAiProxyHostname('[::1]')).toBe(true)
     expect(isLocalAiProxyHostname('app.shotluma.com')).toBe(false)
     expect(getAiProviderTransportAvailability('app.shotluma.com').moonshot).toBe(false)
+    expect(getAiProviderTransportAvailability('app.shotluma.com')['opencode-zen']).toBe(true)
+    expect(getAiProviderTransportAvailability('app.shotluma.com')['opencode-go']).toBe(true)
   })
 
   it('does not mark a stored Moonshot key as usable without the local proxy', () => {

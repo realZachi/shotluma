@@ -10,7 +10,9 @@ export default defineConfig({
       reporter: ['text', 'lcov'],
       include: [
         'src/ai/chroma-key.ts',
+        'src/ai/describe-images.ts',
         'src/ai/normalize-copy.ts',
+        'src/ai/opencode-models.ts',
         'src/ai/overlay-asset-prompt.ts',
         'src/ai/provider-config.ts',
         'src/ai/provider-catalog.ts',

@@ -23,7 +23,7 @@ Projects live entirely in your browser — no Shotluma account or project backen
 
 - **AI that designs, not renders** — the agent works through editor tool calls, so its output is a normal project: every element it creates is selectable and editable, and you can revise a single screen with the magic-cursor action instead of regenerating everything.
 - **Use your ChatGPT plan** — connect the Codex app or CLI to the hosted editor without giving Shotluma an API key.
-- **Bring your own model** — also works with Moonshot, Google, Qwen, OpenAI, Anthropic, xAI, and OpenRouter; pick provider and model per run.
+- **Bring your own model** — also works with Moonshot, Google, Qwen, OpenAI, Anthropic, xAI, OpenRouter, and OpenCode Zen/Go; pick provider and model per run.
 - **Full screenshot sets** — design a multi-screen story on portrait artboards, not one image at a time.
 - **Direct manipulation** — typography, gradients, shapes, images, mockups, alignment, stacking, and spacing are all hand-editable, with or without AI.
 - **Perspective device mockups** — drop a raw screenshot into a device frame with correct 3D geometry.
@@ -84,6 +84,7 @@ VITE_ALIBABA_API_KEY=
 VITE_OPENAI_API_KEY=
 VITE_ANTHROPIC_API_KEY=
 VITE_XAI_API_KEY=
+VITE_OPENCODE_API_KEY=
 ```
 
 Restart the dev server after changing `.env.local` keys. Pick the provider and model in the generation dialog — models with configurable reasoning also expose their effort levels there. If a selected provider has no key, the dialog offers **Enter API key** and disables generation until one is saved.
@@ -91,7 +92,7 @@ Restart the dev server after changing `.env.local` keys. Pick the provider and m
 How it works, and what to know:
 
 - Codex runs go from the hosted browser to the paired loopback connector and then to Codex App Server. The connector exposes only the account, model, thread, turn, and Shotluma dynamic-tool RPC surface; Codex gets a read-only empty workspace with network access disabled.
-- Google, Qwen, OpenAI, Anthropic, xAI, and OpenRouter are called directly from the browser via the AI SDK. Moonshot works only on localhost through the local `/api/moonshot` CORS proxy.
+- Google, Qwen, OpenAI, Anthropic, xAI, and OpenRouter are called directly from the browser via the AI SDK. Moonshot works only on localhost through the local `/api/moonshot` CORS proxy. OpenCode Zen and Go use a same-origin `/api/opencode` proxy (Vite locally, Cloudflare Worker when hosted) because those APIs do not answer browser CORS preflight. Models without native vision send screenshots and previews through a second OpenCode vision model first.
 - When you start a run, your description and selected screenshots are sent to the selected provider or through Codex. Normal editing, persistence, and export never call any AI service. Provider limits or charges may apply.
 - Browser-stored keys are visible to same-origin JavaScript by design. Optional `VITE_*` keys are exposed only by the local dev server; production builds replace every provider env key with an empty value. Never commit `.env.local` (see [Self-hosting](#self-hosting)).
 - Prompts can be written in any language; generated canvas copy and summaries are in English.
@@ -109,7 +110,7 @@ For debugging, set `SHOTLUMA_AI_LOGGING=true` in `.env.local` to write one JSON 
 | `bun run test` | Run the Vitest suite once |
 | `bun run test:coverage` | Tests with coverage thresholds |
 | `bun run build` | Type-check and build the production bundle |
-| `bun run preview` | Serve the production bundle locally, including the Moonshot proxy |
+| `bun run preview` | Serve the production bundle locally, including the Moonshot and OpenCode proxies |
 | `bun run audit` | Check dependencies for known vulnerabilities |
 | `bun run check` | All required local and CI quality gates |
 
@@ -117,13 +118,13 @@ Changes to rendering, export, or AI behavior also need manual verification in th
 
 ## Self-hosting
 
-`bun run build` produces a static app in `dist/`, including the downloadable Codex connector at `codex/shotluma-codex-bridge.mjs`. Provider env values are stripped from the bundle, so it can be hosted as a static site while users connect Codex or supply their own direct-provider keys in the browser.
+`bun run build` produces a static app in `dist/`, including the downloadable Codex connector at `codex/shotluma-codex-bridge.mjs`. Provider env values are stripped from the bundle, so it can be hosted as a static site while users connect Codex or supply their own direct-provider keys in the browser. OpenCode on a hosted origin also needs the `/api/opencode` Worker in `scripts/shotluma-worker.ts` (the official `app.shotluma.com` deploy includes it).
 
 The official editor is deployed at `https://app.shotluma.com`. The marketing
 site at `https://shotluma.com` is maintained and deployed separately; its source
 and production configuration are not part of this repository.
 
-Codex connection prompts pair against the deployment's own origin. Google, Qwen, OpenAI, Anthropic, xAI, and OpenRouter work with browser-entered keys. Moonshot
+Codex connection prompts pair against the deployment's own origin. Google, Qwen, OpenAI, Anthropic, xAI, OpenRouter, and OpenCode work with browser-entered keys. Moonshot
 remains local-only; offering it on a hosted deployment requires an authenticated
 proxy. A hosted workflow with shared credentials likewise needs a backend or
 short-lived credential exchange.

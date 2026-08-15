@@ -5,6 +5,7 @@ export const AI_PROVIDER_ENV_VARIABLES = [
   'VITE_OPENAI_API_KEY',
   'VITE_ANTHROPIC_API_KEY',
   'VITE_XAI_API_KEY',
+  'VITE_OPENCODE_API_KEY',
 ] as const
 
 export type AiProviderEnvironmentVariable = typeof AI_PROVIDER_ENV_VARIABLES[number]

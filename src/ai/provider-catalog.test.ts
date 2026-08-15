@@ -11,8 +11,11 @@ import {
   getAiStreamReasoningOptions,
   getDefaultAiModel,
   getDynamicOpenRouterModels,
+  getAiProviderKeyFields,
   isAiProviderId,
+  modelSupportsVision,
   setDynamicOpenRouterModels,
+  setDynamicProviderModels,
   toAiSdkReasoningEffort,
 } from './provider-catalog'
 
@@ -27,6 +30,8 @@ describe('AI provider catalog', () => {
       'anthropic',
       'xai',
       'openrouter',
+      'opencode-zen',
+      'opencode-go',
     ])
     expect(AI_PROVIDERS.map((provider) => provider.envVar)).toEqual([
       '',
@@ -37,10 +42,12 @@ describe('AI provider catalog', () => {
       'VITE_ANTHROPIC_API_KEY',
       'VITE_XAI_API_KEY',
       'VITE_OPENROUTER_API_KEY',
+      'VITE_OPENCODE_API_KEY',
+      'VITE_OPENCODE_API_KEY',
     ])
     expect(AI_PROVIDERS.filter((provider) => provider.transport === 'proxy').map(
       (provider) => provider.id,
-    )).toEqual(['moonshot'])
+    )).toEqual(['moonshot', 'opencode-zen', 'opencode-go'])
     expect(getAiProvider('codex')).toMatchObject({
       auth: 'chatgpt',
       transport: 'bridge',
@@ -193,5 +200,48 @@ describe('AI provider catalog', () => {
     })).toEqual({
       providerOptions: { openai: { reasoningEffort: 'max' } },
     })
+  })
+
+  it('shares one OpenCode key field and synthesizes runtime catalog models', () => {
+    const opencodeField = getAiProviderKeyFields().find((field) => field.id === 'opencode')
+    expect(opencodeField).toMatchObject({
+      label: 'OpenCode',
+      envVar: 'VITE_OPENCODE_API_KEY',
+      providerIds: ['opencode-zen', 'opencode-go'],
+    })
+    expect(modelSupportsVision(getAiModel({
+      provider: 'opencode-go',
+      model: 'opencode-go/glm-5.3',
+    }))).toBe(false)
+    expect(modelSupportsVision(getAiModel({
+      provider: 'opencode-zen',
+      model: 'opencode-zen/kimi-k3',
+    }))).toBe(true)
+
+    const synthesized = getAiModel({
+      provider: 'opencode-go',
+      model: 'opencode-go/new-model',
+    })
+    expect(synthesized).toEqual({
+      id: 'opencode-go/new-model',
+      label: 'opencode-go/new-model',
+      description: 'OpenCode Go model',
+    })
+    const dynamicModel = {
+      id: 'opencode-go/new-model',
+      label: 'New Go Model',
+      description: 'fetched',
+      supportsVision: false,
+    }
+    setDynamicProviderModels('opencode-go', [dynamicModel])
+    expect(getAiModel({
+      provider: 'opencode-go',
+      model: 'opencode-go/new-model',
+    })).toBe(dynamicModel)
+    expect(findAiModelById('opencode-go/new-model')).toEqual({
+      provider: getAiProvider('opencode-go'),
+      model: dynamicModel,
+    })
+    setDynamicProviderModels('opencode-go', [])
   })
 })
