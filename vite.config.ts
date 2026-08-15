@@ -17,14 +17,16 @@ export default defineConfig(({ command, mode }) => {
       rewrite: (requestPath: string) => requestPath.replace(/^\/api\/moonshot/, ''),
     },
     '/api/opencode/go': {
-      target: 'https://opencode.ai/zen/go',
+      target: 'https://opencode.ai',
       changeOrigin: true,
-      rewrite: (requestPath: string) => requestPath.replace(/^\/api\/opencode\/go/, '') || '/',
+      rewrite: (requestPath: string) =>
+        requestPath.replace(/^\/api\/opencode\/go/, '/zen/go') || '/zen/go',
     },
     '/api/opencode/zen': {
-      target: 'https://opencode.ai/zen',
+      target: 'https://opencode.ai',
       changeOrigin: true,
-      rewrite: (requestPath: string) => requestPath.replace(/^\/api\/opencode\/zen/, '') || '/',
+      rewrite: (requestPath: string) =>
+        requestPath.replace(/^\/api\/opencode\/zen/, '/zen') || '/zen',
     },
   }
 

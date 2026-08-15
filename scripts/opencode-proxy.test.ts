@@ -20,6 +20,9 @@ describe('OpenCode CORS proxy rewrite', () => {
     expect(rewriteOpencodeProxyUrl(
       new URL('https://app.shotluma.com/api/moonshot/v1/chat/completions'),
     )).toBeNull()
+    expect(rewriteOpencodeProxyUrl(
+      new URL('https://app.shotluma.com/api/opencode/go'),
+    )?.toString()).toBe('https://opencode.ai/zen/go/')
   })
 
   it('does not treat a zen path as go', () => {

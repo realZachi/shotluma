@@ -10,8 +10,11 @@ export const OPENCODE_FORWARDED_HEADERS = [
   'accept',
 ] as const
 
-const joinUpstream = (origin: string, suffix: string): URL =>
-  new URL(suffix.length > 0 ? suffix : '/', origin)
+const joinUpstream = (origin: string, suffix: string): URL => {
+  const base = `${origin.replace(/\/$/u, '')}/`
+  const relative = suffix.replace(/^\//u, '')
+  return new URL(relative, base)
+}
 
 /**
  * Map a same-origin OpenCode CORS-proxy path onto the Zen or Go upstream.
