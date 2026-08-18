@@ -150,21 +150,21 @@ export const AI_PROVIDERS: readonly AiProviderOption[] = [
     transport: 'direct',
     models: [
       {
+        id: 'gemini-3.7-flash',
+        label: 'Gemini 3.7 Flash',
+        description: 'Recommended · latest fast Gemini model',
+        reasoningEfforts: GOOGLE_REASONING_EFFORTS,
+      },
+      {
         id: 'gemini-3.6-flash',
         label: 'Gemini 3.6 Flash',
-        description: 'Recommended · latest fast Gemini model',
+        description: 'Previous Flash generation',
         reasoningEfforts: GOOGLE_REASONING_EFFORTS,
       },
       {
         id: 'gemini-3.1-pro-preview',
         label: 'Gemini 3.1 Pro Preview',
         description: 'Highest quality for complex layouts',
-        reasoningEfforts: GOOGLE_REASONING_EFFORTS,
-      },
-      {
-        id: 'gemini-3.5-flash-lite',
-        label: 'Gemini 3.5 Flash Lite',
-        description: 'Fast and cost-efficient',
         reasoningEfforts: GOOGLE_REASONING_EFFORTS,
       },
     ],
@@ -294,8 +294,8 @@ export const AI_PROVIDERS: readonly AiProviderOption[] = [
         reasoningEfforts: OPENROUTER_REASONING_EFFORTS,
       },
       {
-        id: 'google/gemini-3.6-flash',
-        label: 'Gemini 3.6 Flash',
+        id: 'google/gemini-3.7-flash',
+        label: 'Gemini 3.7 Flash',
         description: 'Fast and cost-efficient',
         reasoningEfforts: OPENROUTER_REASONING_EFFORTS,
       },

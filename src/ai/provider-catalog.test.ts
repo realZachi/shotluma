@@ -50,6 +50,14 @@ describe('AI provider catalog', () => {
       providerModelId: 'gpt-5.6-terra',
     })
     expect(getAiProvider('xai').models[0]?.id).toBe('grok-4.5')
+    expect(getAiProvider('google').models.map((model) => model.id)).toEqual([
+      'gemini-3.7-flash',
+      'gemini-3.6-flash',
+      'gemini-3.1-pro-preview',
+    ])
+    expect(getAiProvider('openrouter').models.map((model) => model.id)).toContain(
+      'google/gemini-3.7-flash',
+    )
     expect(getAiProvider('anthropic').models.map((model) => model.id)).toEqual([
       'claude-sonnet-5',
       'claude-opus-5',
@@ -164,7 +172,7 @@ describe('AI provider catalog', () => {
     })).toBe('high')
     expect(getAiSdkReasoningEffort({
       provider: 'google',
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.7-flash',
       reasoningEffort: 'xhigh',
     })).toBe('high')
     expect(getAiSdkReasoningEffort({
