@@ -7,8 +7,10 @@ export type ProjectSnapshot = {
     id: string
     name: string
     index: number
+    kind: 'elements' | 'html'
     background: Record<string, unknown> // background data WITHOUT data URLs: image is replaced with imageAssetId or hasImage
     elements: Record<string, unknown>[] // element data WITHOUT data URLs: for device elements replace `screenshot` with `screenshotAssetId` (matched by comparing src against uploads) or hasScreenshot boolean; for image elements replace `src` with `assetId`
+    html?: string // html screens only: the stored markup, which references uploads via asset: ids and never contains user data URLs
   }[]
   assets: { id: string; name: string }[]
 }
@@ -16,10 +18,12 @@ export type ProjectSnapshot = {
 export type AiEditorController = {
   snapshot(): ProjectSnapshot
   addSlide(input: { name?: string; background?: Background }): string // returns new slide id, appends at end
+  addHtmlSlide(input: { name?: string; html: string }): string // returns new slide id, appends an AI-authored HTML screen
   renameSlide(slideId: string, name: string): boolean
   setSlideBackground(slideId: string, patch: Partial<Background>): boolean
+  setSlideHtml(slideId: string, html: string): boolean // must refuse (return false) for structured element slides
   deleteSlide(slideId: string): boolean // must refuse (return false) if it would delete the last remaining slide
-  addElement(slideId: string, element: Omit<CanvasElement, 'id'>): string | null // returns element id
+  addElement(slideId: string, element: Omit<CanvasElement, 'id'>): string | null // returns element id; refuses on html slides
   updateElement(slideId: string, elementId: string, patch: Record<string, unknown>): boolean
   deleteElement(slideId: string, elementId: string): boolean
   getAssetSrc(assetId: string): string | undefined
@@ -99,8 +103,10 @@ export function createAiController(io: {
         id: slide.id,
         name: slide.name,
         index,
+        kind: slide.html !== undefined ? 'html' as const : 'elements' as const,
         background: serializeBackground(slide.background, uploads),
         elements: slide.elements.map((element) => serializeElement(element, uploads)),
+        ...(slide.html !== undefined ? { html: slide.html } : {}),
       })),
       assets: uploads.map((asset) => ({ id: asset.id, name: asset.name })),
     }
@@ -118,6 +124,28 @@ export function createAiController(io: {
       },
     ])
     return id
+  }
+
+  const addHtmlSlide: AiEditorController['addHtmlSlide'] = ({ name, html }) => {
+    const id = uid('slide')
+    io.setSlides((current) => [
+      ...current,
+      {
+        id,
+        name: name ?? `Screen ${current.length + 1}`,
+        background: DEFAULT_NEW_SLIDE_BACKGROUND,
+        elements: [],
+        html,
+      },
+    ])
+    return id
+  }
+
+  const setSlideHtml: AiEditorController['setSlideHtml'] = (slideId, html) => {
+    const slide = findSlide(slideId)
+    if (slide?.html === undefined) return false
+    io.setSlides((current) => current.map((candidate) => (candidate.id === slideId ? { ...candidate, html } : candidate)))
+    return true
   }
 
   const renameSlide: AiEditorController['renameSlide'] = (slideId, name) => {
@@ -143,7 +171,9 @@ export function createAiController(io: {
   }
 
   const addElement: AiEditorController['addElement'] = (slideId, element) => {
-    if (!findSlide(slideId)) return null
+    const slide = findSlide(slideId)
+    // HTML screens own their entire surface; structured elements would be invisible on them.
+    if (!slide || slide.html !== undefined) return null
     const id = uid(element.type)
     const newElement = { ...element, id } as CanvasElement
     io.setSlides((current) =>
@@ -204,8 +234,10 @@ export function createAiController(io: {
   return {
     snapshot,
     addSlide,
+    addHtmlSlide,
     renameSlide,
     setSlideBackground,
+    setSlideHtml,
     deleteSlide,
     addElement,
     updateElement,
@@ -229,8 +261,10 @@ export function scopeAiControllerToSlide(controller: AiEditorController, targetS
     // Slide creation and deletion are not exposed in edit mode. These guards
     // keep the scoped controller safe if that tool boundary changes later.
     addSlide: () => '',
+    addHtmlSlide: () => '',
     renameSlide: (slideId, name) => isTarget(slideId) && controller.renameSlide(slideId, name),
     setSlideBackground: (slideId, patch) => isTarget(slideId) && controller.setSlideBackground(slideId, patch),
+    setSlideHtml: (slideId, html) => isTarget(slideId) && controller.setSlideHtml(slideId, html),
     deleteSlide: () => false,
     addElement: (slideId, element) => isTarget(slideId) ? controller.addElement(slideId, element) : null,
     updateElement: (slideId, elementId, patch) => isTarget(slideId) && controller.updateElement(slideId, elementId, patch),

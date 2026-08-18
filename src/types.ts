@@ -119,6 +119,12 @@ export type Slide = {
   name: string
   background: Background
   elements: CanvasElement[]
+  /**
+   * Sanitized AI-authored screen markup. When set, the artboard renders this
+   * HTML document (authored at 1290 × 2796 px) instead of background and
+   * elements, and the screen is editable only through AI runs.
+   */
+  html?: string
 }
 
 export type UploadAsset = {

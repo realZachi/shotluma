@@ -4,9 +4,10 @@ import { getSpanGhosts } from '../editor/screen-span'
 import { clamp, getBackgroundPatternStyle, getBackgroundStyle } from '../utils'
 import { AiCursorOverlay } from './AiCursorOverlay'
 import { CanvasItem, SpanGhostItem } from './CanvasElementView'
+import { HtmlSlideContent } from './HtmlSlideContent'
 import { AiGenerative, ChevronLeft, ChevronRight, Copy, CursorMagicSelection02, Plus, Trash2 } from './icons'
 import { Button } from './ui/button'
-import type { CanvasElement, Slide } from '../types'
+import type { CanvasElement, Slide, UploadAsset } from '../types'
 
 type AiActivity = { tool: string; slideId?: string; x?: number; y?: number; seq: number }
 
@@ -27,6 +28,7 @@ type Interaction = {
 
 type Props = {
   slides: Slide[]
+  uploads: UploadAsset[]
   activeSlideId: string
   selectedElementIds: string[]
   exporting: boolean
@@ -48,6 +50,7 @@ type Props = {
 
 export const EditorCanvas = ({
   slides,
+  uploads,
   activeSlideId,
   selectedElementIds,
   exporting,
@@ -265,24 +268,30 @@ export const EditorCanvas = ({
                         onSelectElement(null)
                       }}
                     >
-                      <div className={`artboard-background pattern-surface pattern--${pattern}`} style={backgroundStyle} />
-                      {slide.elements.map((element) => (
-                        <CanvasItem
-                          key={element.id}
-                          element={element}
-                          selected={selectedElementIds.includes(element.id)}
-                          showTransformHandles={selectedElementIds.length === 1}
-                          exporting={exporting}
-                          onSelect={(additive) => onSelectElement(element.id, slide.id, additive)}
-                          onBeginDrag={(event, item) => begin('drag', event, slide.id, item)}
-                          onBeginResize={(event, item) => begin('resize', event, slide.id, item)}
-                          onBeginRotate={(event, item) => begin('rotate', event, slide.id, item)}
-                          onCommitText={(patch) => onCommitText(slide.id, element.id, patch)}
-                        />
-                      ))}
-                      {getSpanGhosts(slides, index).map(({ element }) => (
-                        <SpanGhostItem key={`span-ghost-${element.id}`} element={element} />
-                      ))}
+                      {slide.html !== undefined
+                        ? <HtmlSlideContent html={slide.html} uploads={uploads} />
+                        : (
+                            <>
+                              <div className={`artboard-background pattern-surface pattern--${pattern}`} style={backgroundStyle} />
+                              {slide.elements.map((element) => (
+                                <CanvasItem
+                                  key={element.id}
+                                  element={element}
+                                  selected={selectedElementIds.includes(element.id)}
+                                  showTransformHandles={selectedElementIds.length === 1}
+                                  exporting={exporting}
+                                  onSelect={(additive) => onSelectElement(element.id, slide.id, additive)}
+                                  onBeginDrag={(event, item) => begin('drag', event, slide.id, item)}
+                                  onBeginResize={(event, item) => begin('resize', event, slide.id, item)}
+                                  onBeginRotate={(event, item) => begin('rotate', event, slide.id, item)}
+                                  onCommitText={(patch) => onCommitText(slide.id, element.id, patch)}
+                                />
+                              ))}
+                              {getSpanGhosts(slides, index).map(({ element }) => (
+                                <SpanGhostItem key={`span-ghost-${element.id}`} element={element} />
+                              ))}
+                            </>
+                          )}
                       {snapGuides?.slideId === slide.id && snapGuides.vertical && <div className="snap-guide snap-guide--vertical" data-editor-overlay aria-hidden="true" />}
                       {snapGuides?.slideId === slide.id && snapGuides.horizontal && <div className="snap-guide snap-guide--horizontal" data-editor-overlay aria-hidden="true" />}
                       {aiActivity?.slideId === slide.id && !exporting && <AiCursorOverlay activity={aiActivity} />}

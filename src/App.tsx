@@ -274,6 +274,7 @@ export default function App() {
         )}
         <EditorCanvas
           slides={slides}
+          uploads={uploads}
           activeSlideId={resolvedActiveSlideId}
           selectedElementIds={selectedElementIds}
           exporting={slideExport.exporting}
