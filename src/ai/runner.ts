@@ -381,6 +381,7 @@ const prepareGenerationMessages = async (options: {
   visionFallback: OpencodeVisionFallback | null
   onStatus?: (message: string) => void
   visionAnnouncement: { sent: boolean }
+  descriptionCache: Map<string, string>
 }): Promise<ModelMessage[]> => {
   const relayed = options.needsChatImageRelay
     ? relayChatToolImages(options.messages)
@@ -391,7 +392,11 @@ const prepareGenerationMessages = async (options: {
       options.visionAnnouncement.sent = true
       options.onStatus?.(`Describing images with ${options.visionFallback.visionLabel}…`)
     }
-    next = await describeMessageImages(relayed, options.visionFallback.describeImage)
+    next = await describeMessageImages(
+      relayed,
+      options.visionFallback.describeImage,
+      options.descriptionCache,
+    )
   }
   return options.movingCacheProvider
     ? withMovingCacheBreakpoint(next, options.movingCacheProvider)
@@ -453,6 +458,7 @@ const openAiGenerationStream = (options: {
     ...(signal ? { signal } : {}),
   })
   const visionAnnouncement = { sent: false }
+  const descriptionCache = new Map<string, string>()
 
   return streamText({
     model,
@@ -483,6 +489,7 @@ const openAiGenerationStream = (options: {
               visionFallback,
               ...(onStatus ? { onStatus } : {}),
               visionAnnouncement,
+              descriptionCache,
             }),
           }),
         }

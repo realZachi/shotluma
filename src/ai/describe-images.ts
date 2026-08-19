@@ -104,16 +104,20 @@ export const replaceMessageImages = (
 /**
  * Replace image file parts with text descriptions so a text-only model can
  * still use screenshots and slide previews. Descriptions are cached by image
- * payload so repeated previews of the same bytes are described once.
+ * payload so repeated previews of the same bytes are described once. Pass a
+ * shared `cache` to reuse descriptions across calls — each tool-loop step
+ * re-prepares the full message history, and describe calls cost tens of
+ * seconds each, so re-describing per step would stall every step.
  */
 export const describeMessageImages = async (
   messages: ModelMessage[],
   describeImage: (part: FilePart) => Promise<string>,
+  cache?: Map<string, string>,
 ): Promise<ModelMessage[]> => {
   const images = collectMessageImages(messages)
   if (images.length === 0) return messages
 
-  const descriptions = new Map<string, string>()
+  const descriptions = cache ?? new Map<string, string>()
   for (const image of images) {
     const key = imagePartKey(image)
     if (descriptions.has(key)) continue

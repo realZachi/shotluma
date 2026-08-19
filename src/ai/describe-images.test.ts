@@ -88,6 +88,29 @@ describe('describeMessageImages', () => {
     ])
   })
 
+  it('reuses a shared cache across calls instead of re-describing per step', async () => {
+    const shot = filePart('step-bytes')
+    const cache = new Map<string, string>()
+    let calls = 0
+    const describeImage = async () => {
+      calls += 1
+      return 'described once'
+    }
+
+    const first = await describeMessageImages([userImages(shot)], describeImage, cache)
+    const second = await describeMessageImages([userImages(shot)], describeImage, cache)
+
+    expect(calls).toBe(1)
+    for (const described of [first, second]) {
+      const content = (described[0] as UserModelMessage).content
+      if (!Array.isArray(content)) throw new Error('expected parts')
+      expect(content[1]).toEqual({
+        type: 'text',
+        text: 'Image description:\ndescribed once',
+      })
+    }
+  })
+
   it('converts legacy image parts for the vision request', () => {
     const converted = toVisionFilePart({
       type: 'image',

@@ -491,6 +491,8 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
     if (cancelledRef.current) return
     if (event.type === 'tool') {
       setLatestActivity(event.detail)
+    } else if (event.type === 'status') {
+      setLatestActivity(event.message)
     } else if (event.type === 'plan') setPlan(event.screens)
     // `index` is the count of screens finished before this one, which is exactly the
     // rail's "built" count while this screen is in progress.
@@ -509,7 +511,7 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
       setPhase('done')
       onActivity?.(null)
       onFinished(event.slidesCreated)
-    } else if (event.type === 'error') {
+    } else {
       setNarration(flushNarration)
       setErrorMessage(event.message)
       setPhase('error')
