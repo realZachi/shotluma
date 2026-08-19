@@ -260,8 +260,10 @@ export function AppHeader({
                 onRequestProjectDeletion={onRequestProjectDeletion}
               />
             </div>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-xs"
               className="project-new-button"
               aria-label="New project"
               title="New project"
@@ -269,7 +271,7 @@ export function AppHeader({
               onClick={onCreateProject}
             >
               <Plus size={13} />
-            </button>
+            </Button>
           </div>
         </div>
         <div className="topbar-actions">

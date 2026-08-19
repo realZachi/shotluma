@@ -146,7 +146,7 @@ select:focus-visible {
 .project-new-button:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
 .project-new-button:focus-visible { outline: 0; }
 .project-menu-trigger:hover,
-.project-new-button:hover { background: var(--accent); }
+.project-new-button:not(:disabled):hover { background: var(--accent); }
 .save-state--dirty svg,
 .save-state--saving svg { color: var(--muted-foreground); }
 .save-state--saving svg { animation: save-pulse 1s ease-in-out infinite; }

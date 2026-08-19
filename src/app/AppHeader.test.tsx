@@ -5,7 +5,11 @@ import type { ComponentProps, ReactNode } from 'react'
 
 vi.mock('../components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuContent: ({ children, ...props }: ComponentProps<'div'>) => <div {...props}>{children}</div>,
+  DropdownMenuContent: ({ children, sideOffset, ...props }: ComponentProps<'div'> & { sideOffset?: number }) => {
+    // Radix-only prop; forwarding it to a plain div triggers a React warning.
+    void sideOffset
+    return <div {...props}>{children}</div>
+  },
   DropdownMenuGroup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuItem: ({ children, ...props }: ComponentProps<'div'>) => <div {...props}>{children}</div>,
   DropdownMenuLabel: ({ children }: { children: ReactNode }) => <span>{children}</span>,
