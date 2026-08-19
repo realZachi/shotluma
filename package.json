@@ -2,7 +2,7 @@
   "name": "shotluma",
   "description": "An AI-first, local-first canvas editor for editable App Store screenshot sets.",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.4.0",
   "license": "MIT",
   "packageManager": "bun@1.3.9",
   "overrides": {
