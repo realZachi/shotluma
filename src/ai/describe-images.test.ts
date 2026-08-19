@@ -111,6 +111,41 @@ describe('describeMessageImages', () => {
     }
   })
 
+  it('keys distinct binary payloads separately, including ArrayBuffers', async () => {
+    const bytesPart = (bytes: number[]): FilePart => ({
+      type: 'file',
+      mediaType: 'image/png',
+      data: new Uint8Array(bytes),
+    })
+    // Same length and first byte must not collide.
+    expect(imagePartKey(bytesPart([9, 8, 7]))).not.toBe(imagePartKey(bytesPart([9, 0, 0])))
+    const bufferPart = (bytes: number[]): FilePart => ({
+      type: 'file',
+      mediaType: 'image/png',
+      data: new Uint8Array(bytes).buffer,
+    })
+    expect(imagePartKey(bufferPart([1, 2, 3]))).not.toBe(imagePartKey(bufferPart([1, 2, 4])))
+    // An ArrayBuffer keys by content, matching its Uint8Array view.
+    expect(imagePartKey(bufferPart([1, 2, 3]))).toBe(imagePartKey(bytesPart([1, 2, 3])))
+
+    const descriptions: string[] = []
+    const described = await describeMessageImages(
+      [userImages(bytesPart([9, 8, 7]), bytesPart([9, 0, 0]))],
+      async () => {
+        descriptions.push(`payload ${descriptions.length + 1}`)
+        return descriptions[descriptions.length - 1] ?? ''
+      },
+    )
+    expect(descriptions).toHaveLength(2)
+    expect(described[0]).toMatchObject({
+      content: [
+        { type: 'text', text: 'Screenshots:' },
+        { type: 'text', text: 'Image description:\npayload 1' },
+        { type: 'text', text: 'Image description:\npayload 2' },
+      ],
+    })
+  })
+
   it('converts legacy image parts for the vision request', () => {
     const converted = toVisionFilePart({
       type: 'image',
@@ -154,7 +189,7 @@ describe('describeMessageImages', () => {
       type: 'file',
       mediaType: 'image/png',
       data: new Uint8Array([9, 8, 7]),
-    })).toContain('bytes:3:9')
+    })).toContain('bytes:3:')
     expect(imagePartKey({
       type: 'image',
       image: 'abc',

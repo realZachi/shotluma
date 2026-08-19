@@ -143,9 +143,12 @@ const CatalogModelBrowsers = ({
   selectedModelId: string
   onModelSelect: (providerId: AiProviderId, modelId: string) => void
 }) => {
+  // The key remounts the browser per provider — its load-once effect would
+  // otherwise keep the previous provider's catalog when React reuses the instance.
   if (browsingProvider === 'openrouter') {
     return (
       <AiCatalogModelBrowser
+        key="openrouter"
         heading="All OpenRouter models"
         selectedModelId={selectedModelId}
         loadModels={loadOpenRouterModels}
@@ -156,6 +159,7 @@ const CatalogModelBrowsers = ({
   if (!isOpencodeProviderId(browsingProvider)) return null
   return (
     <AiCatalogModelBrowser
+      key={browsingProvider}
       heading={`All ${getAiProvider(browsingProvider).label} models`}
       selectedModelId={selectedModelId}
       loadModels={() => loadOpencodeModels(browsingProvider)}
@@ -284,9 +288,13 @@ export const AiProviderControls = ({
     : undefined
 
   useEffect(() => {
+    let cancelled = false
     void loadAllOpencodeModels().then(() => {
-      setCatalogRevision((current) => current + 1)
+      if (!cancelled) setCatalogRevision((current) => current + 1)
     })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return (

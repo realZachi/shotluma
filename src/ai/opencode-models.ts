@@ -22,6 +22,10 @@ export const isOpencodeProviderId = (
 
 export const OPENCODE_MODELS_TTL_MS = 60 * 60 * 1000
 
+// Bounds the catalog request so a stalled gateway falls back to the curated
+// shortlist instead of leaving the model browser loading forever.
+export const OPENCODE_MODELS_REQUEST_TIMEOUT_MS = 10_000
+
 const STORAGE_KEYS: Record<OpencodeProviderId, string> = {
   'opencode-zen': 'shotluma-opencode-zen-models',
   'opencode-go': 'shotluma-opencode-go-models',
@@ -33,8 +37,10 @@ const GATEWAY_BY_PROVIDER: Record<OpencodeProviderId, OpencodeGateway> = {
 }
 
 /**
- * Models.dev reports these OpenCode ids as text-only. Unknown live ids default
- * to the same so a new coding model cannot silently drop screenshots.
+ * Models.dev reports these OpenCode ids as text-only; the runner describes
+ * images for them instead of attaching them. Unknown live ids default to
+ * vision-capable so screenshots reach new models untouched — a wrong default
+ * fails loudly at the provider instead of silently flattening images to text.
  */
 const OPENCODE_TEXT_ONLY_MODELS = new Set([
   'big-pickle',
@@ -301,7 +307,9 @@ const fetchRemoteModels = async (
   now: number,
   storage: ModelStorage | null,
 ): Promise<OpencodeModelsResult> => {
-  const response = await fetch(opencodeModelsUrl(providerId))
+  const response = await fetch(opencodeModelsUrl(providerId), {
+    signal: AbortSignal.timeout(OPENCODE_MODELS_REQUEST_TIMEOUT_MS),
+  })
   if (!response.ok) {
     throw new Error(`OpenCode models request failed: ${response.status}`)
   }

@@ -185,6 +185,13 @@ describe('AI provider configuration', () => {
       'opencode-zen': 'zen-go-key',
       'opencode-go': 'zen-go-key',
     })
+    expect(parseStoredAiProviderKeys(JSON.stringify({
+      'opencode-zen': ' zen-only-key ',
+    }))).toEqual({
+      ...createEmptyAiProviderKeys(),
+      'opencode-zen': 'zen-only-key',
+      'opencode-go': 'zen-only-key',
+    })
 
     const storage = createMemoryStorage()
     expect(writeStoredAiProviderKeys({

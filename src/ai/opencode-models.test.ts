@@ -152,10 +152,11 @@ describe('loadOpencodeModels', () => {
     expect(opencodeModelsUrl('opencode-go', 'null'))
       .toBe('https://opencode.ai/zen/go/v1/models')
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ data: [{ id: 'kimi-k3' }] }),
-    }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
     const [first, second, all] = await Promise.all([
       loadOpencodeModels('opencode-zen', { now: 42, storage: null }),
       loadOpencodeModels('opencode-zen', { now: 42, storage: null }),
@@ -164,5 +165,7 @@ describe('loadOpencodeModels', () => {
     expect(first.source).toBe('remote')
     expect(second.source).toBe('remote')
     expect(all).toHaveLength(2)
+    // One request per gateway, not one per caller.
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

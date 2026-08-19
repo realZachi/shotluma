@@ -24,12 +24,25 @@ export const OPENCODE_VISION_PROMPT = `Describe this image for a designer who ca
 Focus on layout, visual hierarchy, colors, typography, exact visible copy, UI elements, icons, device frames, and spacing.
 Be concrete and complete. Do not suggest improvements.`
 
+// Two FNV-1a variants over the full payload keep same-length images from
+// sharing a cache key without pulling in a hashing dependency.
+const hashBytes = (bytes: Uint8Array): string => {
+  let a = 0x811c9dc5
+  let b = 0x811c9dc5
+  for (const byte of bytes) {
+    a = Math.imul(a ^ byte, 0x01000193)
+    b = Math.imul(b ^ byte, 0x85ebca77)
+  }
+  return `${(a >>> 0).toString(16)}-${(b >>> 0).toString(16)}`
+}
+
 const serializeImageData = (data: unknown): string => {
   if (typeof data === 'string') return data
   if (data instanceof URL) return data.toString()
   if (isRecord(data) && data['type'] === 'data') return serializeImageData(data['data'])
   if (isRecord(data) && data['type'] === 'url') return serializeImageData(data['url'])
-  if (data instanceof Uint8Array) return `bytes:${data.byteLength}:${data[0] ?? 0}`
+  if (data instanceof Uint8Array) return `bytes:${data.byteLength}:${hashBytes(data)}`
+  if (data instanceof ArrayBuffer) return serializeImageData(new Uint8Array(data))
   return JSON.stringify(data)
 }
 

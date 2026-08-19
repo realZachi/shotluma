@@ -123,7 +123,9 @@ const buildUserContent = (options: {
 
 const createAiModel = async (selection: AiModelSelection) => {
   if (!getAiProviderTransportAvailability()[selection.provider]) {
-    throw new Error('Moonshot requires the local Shotluma CORS proxy and is unavailable on this host')
+    throw new Error(
+      `${getAiProvider(selection.provider).label} requires the local Shotluma CORS proxy and is unavailable on this host`,
+    )
   }
   const apiKey = getAiProviderKey(selection.provider)
   if (!apiKey) {
@@ -344,14 +346,19 @@ const needsChatToolImageRelay = (selection: AiModelSelection): boolean => {
     || selection.provider === 'qwen'
 }
 
+export type OpencodeVisionFallback = {
+  describeImage: ReturnType<typeof createOpencodeImageDescriber>
+  visionLabel: string
+}
+
+const needsOpencodeVisionFallback = (selection: AiModelSelection): boolean =>
+  isOpencodeProviderId(selection.provider) && !modelSupportsVision(getAiModel(selection))
+
 const resolveOpencodeVisionDescriber = (options: {
   selection: AiModelSelection
   apiKey: string
   signal?: AbortSignal
-}): {
-  describeImage: ReturnType<typeof createOpencodeImageDescriber>
-  visionLabel: string
-} | null => {
+}): OpencodeVisionFallback | null => {
   if (!isOpencodeProviderId(options.selection.provider)) return null
   const model = getAiModel(options.selection)
   if (modelSupportsVision(model)) return null
@@ -380,31 +387,36 @@ const resolveOpencodeVisionDescriber = (options: {
   }
 }
 
-type OpencodeVisionFallback = NonNullable<
-  ReturnType<typeof resolveOpencodeVisionDescriber>
->
-
-const prepareGenerationMessages = async (options: {
+/**
+ * The resolver runs only once a prepared step actually contains an image, so
+ * a text-only OpenCode model without any vision fallback in the catalog can
+ * still run image-free requests; the missing-fallback error surfaces the
+ * moment a screenshot or slide preview enters the conversation.
+ */
+export const prepareGenerationMessages = async (options: {
   messages: ModelMessage[]
   movingCacheProvider: 'anthropic' | 'alibaba' | null
   needsChatImageRelay: boolean
-  visionFallback: OpencodeVisionFallback | null
+  resolveVisionFallback: (() => OpencodeVisionFallback) | null
   onStatus?: (message: string) => void
   visionAnnouncement: { sent: boolean }
   descriptionCache: Map<string, string>
 }): Promise<ModelMessage[]> => {
-  const relayed = options.needsChatImageRelay
+  // Text-only models reject images anywhere, so the vision fallback also
+  // needs tool-result images relayed into user messages before describing.
+  const relayed = options.needsChatImageRelay || options.resolveVisionFallback !== null
     ? relayChatToolImages(options.messages)
     : options.messages
   let next = relayed
-  if (options.visionFallback) {
-    if (!options.visionAnnouncement.sent && collectMessageImages(relayed).length > 0) {
+  if (options.resolveVisionFallback && collectMessageImages(relayed).length > 0) {
+    const visionFallback = options.resolveVisionFallback()
+    if (!options.visionAnnouncement.sent) {
       options.visionAnnouncement.sent = true
-      options.onStatus?.(`Describing images with ${options.visionFallback.visionLabel}…`)
+      options.onStatus?.(`Describing images with ${visionFallback.visionLabel}…`)
     }
     next = await describeMessageImages(
       relayed,
-      options.visionFallback.describeImage,
+      visionFallback.describeImage,
       options.descriptionCache,
     )
   }
@@ -462,11 +474,20 @@ const openAiGenerationStream = (options: {
     ? 'anthropic'
     : selection.provider === 'qwen' ? 'alibaba' : null
   const needsChatImageRelay = needsChatToolImageRelay(selection)
-  const visionFallback = resolveOpencodeVisionDescriber({
-    selection,
-    apiKey: getAiProviderKey(selection.provider),
-    ...(signal ? { signal } : {}),
-  })
+  let cachedVisionFallback: OpencodeVisionFallback | null = null
+  const resolveVisionFallback = needsOpencodeVisionFallback(selection)
+    ? (): OpencodeVisionFallback => {
+        cachedVisionFallback ??= resolveOpencodeVisionDescriber({
+          selection,
+          apiKey: getAiProviderKey(selection.provider),
+          ...(signal ? { signal } : {}),
+        })
+        if (!cachedVisionFallback) {
+          throw new Error(`${getAiModel(selection).label} has no vision fallback to describe images.`)
+        }
+        return cachedVisionFallback
+      }
+    : null
   const visionAnnouncement = { sent: false }
   const descriptionCache = new Map<string, string>()
 
@@ -489,14 +510,14 @@ const openAiGenerationStream = (options: {
     ...requestOptions,
     // Anthropic and Alibaba require explicit message breakpoints. Keep one
     // moving forward so each step can reuse the growing tool-loop prefix.
-    ...(movingCacheProvider || needsChatImageRelay || visionFallback
+    ...(movingCacheProvider || needsChatImageRelay || resolveVisionFallback
       ? {
           prepareStep: async ({ messages }: { messages: ModelMessage[] }) => ({
             messages: await prepareGenerationMessages({
               messages,
               movingCacheProvider,
               needsChatImageRelay,
-              visionFallback,
+              resolveVisionFallback,
               ...(onStatus ? { onStatus } : {}),
               visionAnnouncement,
               descriptionCache,
