@@ -39,7 +39,7 @@
     "@ai-sdk/anthropic": "4.0.20",
     "@ai-sdk/google": "^4.0.23",
     "@ai-sdk/openai": "^4.0.19",
-    "@ai-sdk/xai": "^4.0.18",
+    "@ai-sdk/xai": "^4.0.40",
     "@base-ui/react": "^1.6.0",
     "@fontsource-variable/bricolage-grotesque": "latest",
     "@fontsource-variable/geist": "^5.3.0",
