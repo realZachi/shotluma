@@ -27,9 +27,13 @@ export const deviceElementFromAttributes = (
   const mockup = attributes.mockup ?? ''
   const theme = attributes.theme ?? ''
   const shadow = Number(attributes.shadow ?? '')
-  // Only an already-resolved upload (data URL) may reach the screen; an
+  // Only an already-resolved upload may reach the screen: an object URL from
+  // the Blob asset store, or a data URL from its storage fallback. An
   // unresolved asset: reference or anything else falls back to the fake screen.
-  const screenshot = attributes.screenshot?.startsWith('data:image/') ? attributes.screenshot : undefined
+  const rawScreenshot = attributes.screenshot
+  const screenshot = rawScreenshot && (rawScreenshot.startsWith('blob:') || rawScreenshot.startsWith('data:image/'))
+    ? rawScreenshot
+    : undefined
 
   return {
     id: `html-device-${index}`,

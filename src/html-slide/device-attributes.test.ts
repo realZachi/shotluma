@@ -39,6 +39,11 @@ describe('deviceElementFromAttributes', () => {
     expect(deviceElementFromAttributes({ screenshot: 'https://evil.example/shot.png' }, 0).screenshot).toBeUndefined()
   })
 
+  it('accepts an object URL resolved from the Blob asset store', () => {
+    const screenshot = 'blob:http://127.0.0.1:4173/0b1c2d3e'
+    expect(deviceElementFromAttributes({ screenshot }, 0).screenshot).toBe(screenshot)
+  })
+
   it('clamps shadow into the editor range', () => {
     expect(deviceElementFromAttributes({ shadow: '400' }, 0).shadow).toBe(100)
     expect(deviceElementFromAttributes({ shadow: '-4' }, 0).shadow).toBe(0)
