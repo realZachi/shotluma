@@ -49,7 +49,10 @@ describe('AI provider catalog', () => {
       id: 'codex/gpt-5.6-terra',
       providerModelId: 'gpt-5.6-terra',
     })
-    expect(getAiProvider('xai').models[0]?.id).toBe('grok-4.5')
+    expect(getAiProvider('xai').models.map((model) => model.id)).toEqual([
+      'grok-4.6',
+      'grok-4.5',
+    ])
     expect(getAiProvider('google').models.map((model) => model.id)).toEqual([
       'gemini-3.7-flash',
       'gemini-3.6-flash',
@@ -156,6 +159,20 @@ describe('AI provider catalog', () => {
       'high',
       'max',
     ])
+    expect(getAiProvider('xai').models.map((model) => model.reasoningEfforts)).toEqual([
+      ['low', 'medium', 'high', 'xhigh'],
+      ['low', 'medium', 'high'],
+    ])
+    expect(getAiSdkReasoningEffort({
+      provider: 'xai',
+      model: 'grok-4.6',
+      reasoningEffort: 'xhigh',
+    })).toBe('xhigh')
+    expect(getAiSdkReasoningEffort({
+      provider: 'xai',
+      model: 'grok-4.5',
+      reasoningEffort: 'xhigh',
+    })).toBe('high')
     expect(getAiSdkReasoningEffort({
       provider: 'openai',
       model: 'gpt-5.6-sol',

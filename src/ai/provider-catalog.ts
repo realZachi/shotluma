@@ -76,7 +76,8 @@ const OPENAI_REASONING_EFFORTS = [
   'max',
 ] as const satisfies readonly AiReasoningEffort[]
 
-const XAI_REASONING_EFFORTS = [
+/** Grok 4.5: low / medium / high (`xhigh` is grok-4.6 only). */
+const XAI_GROK_45_REASONING_EFFORTS = [
   'low',
   'medium',
   'high',
@@ -264,10 +265,16 @@ export const AI_PROVIDERS: readonly AiProviderOption[] = [
     transport: 'direct',
     models: [
       {
+        id: 'grok-4.6',
+        label: 'Grok 4.6',
+        description: 'Recommended · flagship reasoning model',
+        reasoningEfforts: STANDARD_REASONING_EFFORTS,
+      },
+      {
         id: 'grok-4.5',
         label: 'Grok 4.5',
-        description: 'Recommended · flagship reasoning model',
-        reasoningEfforts: XAI_REASONING_EFFORTS,
+        description: 'Previous generation',
+        reasoningEfforts: XAI_GROK_45_REASONING_EFFORTS,
       },
     ],
   },

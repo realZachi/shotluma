@@ -242,22 +242,36 @@ export function AppHeader({
             {saveStatus === 'error' ? <AlertCircle size={13} /> : <Cloud size={13} />}
             {saveStatusLabels[saveStatus]}
           </span>
-          <div className="project-name-control">
-            <input
-              value={projectName}
-              onChange={(event) => onProjectNameChange(event.target.value)}
-              aria-label="Project name"
-            />
-            <ProjectMenu
-              projects={projects}
-              currentProjectId={currentProjectId}
+          <div className="project-switcher">
+            <div className="project-name-control">
+              <input
+                value={projectName}
+                onChange={(event) => onProjectNameChange(event.target.value)}
+                aria-label="Project name"
+              />
+              <ProjectMenu
+                projects={projects}
+                currentProjectId={currentProjectId}
+                disabled={projectMenuDisabled}
+                onOpenProject={onOpenProject}
+                onCreateProject={onCreateProject}
+                onDuplicateProject={onDuplicateProject}
+                onSaveProject={onSaveProject}
+                onRequestProjectDeletion={onRequestProjectDeletion}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="project-new-button"
+              aria-label="New project"
+              title="New project"
               disabled={projectMenuDisabled}
-              onOpenProject={onOpenProject}
-              onCreateProject={onCreateProject}
-              onDuplicateProject={onDuplicateProject}
-              onSaveProject={onSaveProject}
-              onRequestProjectDeletion={onRequestProjectDeletion}
-            />
+              onClick={onCreateProject}
+            >
+              <Plus size={13} />
+            </Button>
           </div>
         </div>
         <div className="topbar-actions">

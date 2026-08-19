@@ -14,6 +14,7 @@ import { relayChatToolImages } from './chat-tool-images'
 import { runCodexAppServerGeneration } from './codex-app-server'
 import { readCodexConnection } from './codex-connection'
 import { scopeAiControllerToSlide, type AiEditorController } from './controller'
+import { buildHtmlInstructions } from './html-prompt'
 import { buildInstructions, buildUserMessage } from './prompt'
 import {
   buildStreamRequestOptions,
@@ -69,8 +70,9 @@ const buildUserContent = (options: {
   appName?: string
   logo?: PreparedAsset
   targetSlideId?: string
+  htmlMode?: boolean
 }): UserContent[] => {
-  const { description, screenshots, appName, logo, targetSlideId } = options
+  const { description, screenshots, appName, logo, targetSlideId, htmlMode } = options
   const content: UserContent[] = [{
     type: 'text',
     text: buildUserMessage(
@@ -80,6 +82,7 @@ const buildUserContent = (options: {
         ...(targetSlideId ? { targetSlideId } : {}),
         ...(appName?.trim() ? { appName: appName.trim() } : {}),
         ...(logo ? { logoAssetId: logo.assetId } : {}),
+        ...(htmlMode ? { htmlMode: true } : {}),
       },
     ),
   }]
@@ -92,7 +95,9 @@ const buildUserContent = (options: {
   if (logo) {
     content.push({
       type: 'text',
-      text: `App logo asset "${logo.assetId}" (${logo.name}) — place with add_image, never as a device screenshot:`,
+      text: htmlMode
+        ? `App logo asset "${logo.assetId}" (${logo.name}) — place with an <img src="asset:${logo.assetId}"> tag, never as a device screenshot:`
+        : `App logo asset "${logo.assetId}" (${logo.name}) — place with add_image, never as a device screenshot:`,
     })
     content.push({ type: 'file', mediaType: extractMediaType(logo.dataUrl), data: logo.dataUrl })
   }
@@ -249,6 +254,10 @@ const collectStreamPart = <TOOLS extends ToolSet>(options: {
           accumulator.slidesCreated += 1
         }
       }
+      if (part.toolName === 'add_html_screen') {
+        onEvent({ type: 'slide-started', index: accumulator.slidesCreated })
+        accumulator.slidesCreated += 1
+      }
       const detail = describeAiToolCall(part.toolName, part.input)
       accumulator.toolCalls.push({
         name: part.toolName,
@@ -256,6 +265,15 @@ const collectStreamPart = <TOOLS extends ToolSet>(options: {
         offsetMs: Date.now() - runStartedAt,
       })
       onEvent({ type: 'tool', name: part.toolName, detail })
+      break
+    }
+    case 'tool-result': {
+      // add_html_screen can fail without creating anything (oversized markup);
+      // take the optimistic slide count back so the final report stays honest.
+      const output = part.output as { ok?: boolean } | null | undefined
+      if (part.toolName === 'add_html_screen' && output?.ok === false) {
+        accumulator.slidesCreated = Math.max(0, accumulator.slidesCreated - 1)
+      }
       break
     }
     case 'finish':
@@ -295,6 +313,7 @@ const openAiGenerationStream = (options: {
   content: UserContent[]
   targetSlideId?: string
   enableOverlayAssets?: boolean
+  htmlMode?: boolean
   signal?: AbortSignal
   onActivity?: (activity: AiToolActivity) => void
   onStepUsage?: (usage: LanguageModelUsage, toolNames: string[]) => void
@@ -306,6 +325,7 @@ const openAiGenerationStream = (options: {
     content,
     targetSlideId,
     enableOverlayAssets,
+    htmlMode,
     signal,
     onActivity,
     onStepUsage,
@@ -318,13 +338,17 @@ const openAiGenerationStream = (options: {
     selection.model,
     selection.reasoningEffort ?? 'default-effort',
     targetSlideId ? 'edit' : 'generate',
-    enableOverlayAssets ? 'overlay' : 'standard',
+    htmlMode ? 'html' : enableOverlayAssets ? 'overlay' : 'standard',
   ].join(':')
   const requestOptions = buildStreamRequestOptions(selection, promptCacheKey)
-  const instructions = buildInstructions({
-    ...(targetSlideId ? { targetSlideId } : {}),
-    ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
-  })
+  const instructions = htmlMode
+    ? buildHtmlInstructions({
+        ...(targetSlideId ? { targetSlideId } : {}),
+      })
+    : buildInstructions({
+        ...(targetSlideId ? { targetSlideId } : {}),
+        ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
+      })
   const movingCacheProvider = selection.provider === 'anthropic'
     ? 'anthropic'
     : selection.provider === 'qwen' ? 'alibaba' : null
@@ -338,8 +362,9 @@ const openAiGenerationStream = (options: {
     messages: [{ role: 'user', content }],
     tools: createEditorTools(runController, {
       mode: targetSlideId ? 'edit' : 'generate',
+      ...(htmlMode ? { htmlScreens: true } : {}),
       ...(onActivity ? { onActivity } : {}),
-      ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
+      ...(enableOverlayAssets && !htmlMode ? { enableOverlayAssets: true } : {}),
       ...(signal ? { abortSignal: signal } : {}),
     }),
     stopWhen: isStepCount(64),
@@ -377,6 +402,7 @@ const runCodexProviderGeneration = async (options: {
   controller: AiEditorController
   targetSlideId?: string
   enableOverlayAssets?: boolean
+  htmlMode?: boolean
   signal?: AbortSignal
   runStartedAt: number
   accumulator: AiRunAccumulator
@@ -396,7 +422,8 @@ const runCodexProviderGeneration = async (options: {
     ...(options.logo ? { logo: options.logo } : {}),
     controller: options.controller,
     ...(options.targetSlideId ? { targetSlideId: options.targetSlideId } : {}),
-    ...(options.enableOverlayAssets ? { enableOverlayAssets: true } : {}),
+    ...(options.enableOverlayAssets && !options.htmlMode ? { enableOverlayAssets: true } : {}),
+    ...(options.htmlMode ? { htmlMode: true } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
     onEvent: (event) => collectCodexEvent({
       event,
@@ -417,6 +444,7 @@ const runDirectProviderGeneration = async (options: {
   controller: AiEditorController
   targetSlideId?: string
   enableOverlayAssets?: boolean
+  htmlMode?: boolean
   signal?: AbortSignal
   runStartedAt: number
   accumulator: AiRunAccumulator
@@ -432,6 +460,7 @@ const runDirectProviderGeneration = async (options: {
     controller,
     targetSlideId,
     enableOverlayAssets,
+    htmlMode,
     signal,
     runStartedAt,
     accumulator,
@@ -448,6 +477,7 @@ const runDirectProviderGeneration = async (options: {
     ...(appName !== undefined ? { appName } : {}),
     ...(logo ? { logo } : {}),
     ...(targetSlideId ? { targetSlideId } : {}),
+    ...(htmlMode ? { htmlMode: true } : {}),
   })
 
   onEvent({
@@ -466,6 +496,7 @@ const runDirectProviderGeneration = async (options: {
     content,
     ...(targetSlideId ? { targetSlideId } : {}),
     ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
+    ...(htmlMode ? { htmlMode: true } : {}),
     ...(signal ? { signal } : {}),
     ...(onActivity ? { onActivity } : {}),
     onStepUsage: (usage, toolNames) => {
@@ -535,6 +566,8 @@ export async function runAiGeneration(options: {
   controller: AiEditorController
   targetSlideId?: string
   enableOverlayAssets?: boolean
+  /** Experimental: the model authors whole screens as sanitized HTML instead of using element tools. */
+  htmlMode?: boolean
   signal?: AbortSignal
   onEvent: (event: AiRunEvent) => void
   onActivity?: (activity: AiToolActivity) => void
@@ -548,6 +581,7 @@ export async function runAiGeneration(options: {
     controller,
     targetSlideId,
     enableOverlayAssets,
+    htmlMode,
     signal,
     onEvent,
     onActivity,
@@ -602,6 +636,7 @@ export async function runAiGeneration(options: {
         controller,
         ...(targetSlideId ? { targetSlideId } : {}),
         ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
+        ...(htmlMode ? { htmlMode: true } : {}),
         ...(signal ? { signal } : {}),
         runStartedAt,
         accumulator,
@@ -620,6 +655,7 @@ export async function runAiGeneration(options: {
       controller,
       ...(targetSlideId ? { targetSlideId } : {}),
       ...(enableOverlayAssets ? { enableOverlayAssets: true } : {}),
+      ...(htmlMode ? { htmlMode: true } : {}),
       ...(signal ? { signal } : {}),
       runStartedAt,
       accumulator,

@@ -133,7 +133,8 @@ select:focus-visible {
 
 .save-state svg { color: var(--foreground); }
 
-.project-name-control {
+.project-name-control,
+.project-new-button {
   border-color: var(--border);
   border-radius: var(--radius-md);
   background: var(--secondary);
@@ -141,8 +142,11 @@ select:focus-visible {
 
 .project-meta input { color: var(--foreground); }
 
-.project-name-control:focus-within { box-shadow: 0 0 0 2px var(--ring); }
-.project-menu-trigger:hover { background: var(--accent); }
+.project-name-control:focus-within,
+.project-new-button:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+.project-new-button:focus-visible { outline: 0; }
+.project-menu-trigger:hover,
+.project-new-button:not(:disabled):hover { background: var(--accent); }
 .save-state--dirty svg,
 .save-state--saving svg { color: var(--muted-foreground); }
 .save-state--saving svg { animation: save-pulse 1s ease-in-out infinite; }
