@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { opencodeChatBaseUrl, opencodeRequestModelId } from './opencode-client'
+import { opencodeBaseUrl } from './opencode-client'
+import { opencodeRequestModelId } from './opencode-models'
 
 describe('OpenCode client routing', () => {
   it('builds same-origin proxy base URLs for Zen and Go', () => {
-    expect(opencodeChatBaseUrl('opencode-zen', 'https://app.shotluma.com'))
+    expect(opencodeBaseUrl('opencode-zen', 'https://app.shotluma.com'))
       .toBe('https://app.shotluma.com/api/opencode/zen/v1')
-    expect(opencodeChatBaseUrl('opencode-go', 'http://127.0.0.1:4173'))
+    expect(opencodeBaseUrl('opencode-go', 'http://127.0.0.1:4173'))
       .toBe('http://127.0.0.1:4173/api/opencode/go/v1')
   })
 

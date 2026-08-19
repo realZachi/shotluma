@@ -1,3 +1,4 @@
+import { opencodeSelectionDialect } from './opencode-dialects'
 import {
   getAiStreamReasoningOptions,
   type AiModelSelection,
@@ -34,11 +35,18 @@ export type AiStreamRequestOptions = {
  * still thinks and still bills those tokens while withholding every thought
  * summary — the run band then has no live prose to show for the whole run.
  *
+ * OpenCode's Gemini models run on the same Google provider through the gateway,
+ * so they need the same option to stream thoughts.
+ *
  * Keep this object limited to `includeThoughts`. Adding `thinkingLevel` or
  * `thinkingBudget` here would take full precedence over the portable `reasoning`
  * option and silently discard the user's effort choice.
  */
 const GOOGLE_THOUGHT_OPTIONS = { thinkingConfig: { includeThoughts: true } } as const
+
+const usesGoogleGeneration = (selection: AiModelSelection): boolean =>
+  selection.provider === 'google'
+  || opencodeSelectionDialect(selection) === 'google'
 
 /**
  * Combine the reasoning-effort options with OpenAI's request-wide cache
@@ -57,7 +65,7 @@ export const buildStreamRequestOptions = (
   promptCacheKey: string,
 ): AiStreamRequestOptions => {
   const reasoningOptions = getAiStreamReasoningOptions(selection)
-  if (selection.provider === 'google') {
+  if (usesGoogleGeneration(selection)) {
     return {
       ...(reasoningOptions && 'reasoning' in reasoningOptions
         ? { reasoning: reasoningOptions.reasoning }

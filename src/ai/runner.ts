@@ -17,12 +17,16 @@ import { scopeAiControllerToSlide, type AiEditorController } from './controller'
 import { collectMessageImages, describeMessageImages } from './describe-images'
 import { buildHtmlInstructions } from './html-prompt'
 import {
-  createOpencodeChatModel,
   createOpencodeImageDescriber,
-  opencodeRequestModelId,
+  createOpencodeModel,
 } from './opencode-client'
 import {
+  opencodeDialectNeedsChatToolImageRelay,
+  opencodeSelectionDialect,
+} from './opencode-dialects'
+import {
   isOpencodeProviderId,
+  opencodeRequestModelId,
   pickOpencodeVisionModel,
 } from './opencode-models'
 import { buildInstructions, buildUserMessage } from './prompt'
@@ -177,7 +181,7 @@ const createAiModel = async (selection: AiModelSelection) => {
     case 'opencode-zen':
     case 'opencode-go': {
       const model = getAiModel(selection)
-      return createOpencodeChatModel({
+      return createOpencodeModel({
         providerId: selection.provider,
         modelId: opencodeRequestModelId(model.id, model.providerModelId),
         apiKey,
@@ -328,11 +332,17 @@ export const NARRATION_WORD_DELAY_MS = 18
 export const narrationSmoothing = () =>
   smoothStream<ToolSet>({ delayInMs: NARRATION_WORD_DELAY_MS })
 
-const needsChatToolImageRelay = (provider: AiModelSelection['provider']): boolean =>
-  provider === 'moonshot'
-  || provider === 'openrouter'
-  || provider === 'qwen'
-  || isOpencodeProviderId(provider)
+/**
+ * OpenCode serves each model on one of four dialects, and only its
+ * chat-completions models reject images inside tool results.
+ */
+const needsChatToolImageRelay = (selection: AiModelSelection): boolean => {
+  const dialect = opencodeSelectionDialect(selection)
+  if (dialect) return opencodeDialectNeedsChatToolImageRelay(dialect)
+  return selection.provider === 'moonshot'
+    || selection.provider === 'openrouter'
+    || selection.provider === 'qwen'
+}
 
 const resolveOpencodeVisionDescriber = (options: {
   selection: AiModelSelection
@@ -451,7 +461,7 @@ const openAiGenerationStream = (options: {
   const movingCacheProvider = selection.provider === 'anthropic'
     ? 'anthropic'
     : selection.provider === 'qwen' ? 'alibaba' : null
-  const needsChatImageRelay = needsChatToolImageRelay(selection.provider)
+  const needsChatImageRelay = needsChatToolImageRelay(selection)
   const visionFallback = resolveOpencodeVisionDescriber({
     selection,
     apiKey: getAiProviderKey(selection.provider),

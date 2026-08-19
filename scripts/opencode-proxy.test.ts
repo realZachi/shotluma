@@ -25,6 +25,18 @@ describe('OpenCode CORS proxy rewrite', () => {
     )?.toString()).toBe('https://opencode.ai/zen/go/')
   })
 
+  it('maps every dialect path each gateway serves', () => {
+    expect(rewriteOpencodeProxyUrl(
+      new URL('https://app.shotluma.com/api/opencode/go/v1/responses'),
+    )?.toString()).toBe('https://opencode.ai/zen/go/v1/responses')
+    expect(rewriteOpencodeProxyUrl(
+      new URL('https://app.shotluma.com/api/opencode/zen/v1/messages'),
+    )?.toString()).toBe('https://opencode.ai/zen/v1/messages')
+    expect(rewriteOpencodeProxyUrl(
+      new URL('https://app.shotluma.com/api/opencode/zen/v1/models/gemini-3.7-flash:streamGenerateContent'),
+    )?.toString()).toBe('https://opencode.ai/zen/v1/models/gemini-3.7-flash:streamGenerateContent')
+  })
+
   it('does not treat a zen path as go', () => {
     expect(rewriteOpencodeProxyUrl(
       new URL('https://app.shotluma.com/api/opencode/zen/v1/models'),
@@ -45,6 +57,22 @@ describe('OpenCode CORS proxy headers and methods', () => {
       authorization: 'Bearer test-key',
       'content-type': 'application/json',
       accept: 'text/event-stream',
+    })
+  })
+
+  it('forwards the Anthropic and Google credentials the other dialects use', () => {
+    const headers = copyOpencodeProxyHeaders(new Headers({
+      'x-api-key': 'sk-test',
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'fine-grained-tool-streaming-2025-05-14',
+      'x-goog-api-key': 'goog-test',
+      origin: 'https://evil.example',
+    }))
+    expect(Object.fromEntries(headers.entries())).toEqual({
+      'x-api-key': 'sk-test',
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'fine-grained-tool-streaming-2025-05-14',
+      'x-goog-api-key': 'goog-test',
     })
   })
 

@@ -13,13 +13,24 @@ Generate mode does not spend a model turn re-reading canvas state already presen
 
 Preview images are rendered at the editor's native 330 px width rather than upscaled, use OpenAI's low-detail vision path because exact geometry arrives separately, and are capped at three attempts per generated screen (four for edit mode's before/after checks). Mutations return only warnings involving the changed element; the preview is the one deduplicated slide-wide validation point. Measurement boxes remain rounded to one decimal (`src/ai/measure.ts`).
 
-OpenAI Responses, Anthropic, Google, xAI, and Codex accept image-bearing tool results directly. OpenAI-compatible Chat Completions and Alibaba do not: before Moonshot, OpenRouter, Qwen, or OpenCode steps, `src/ai/chat-tool-images.ts` moves image files out of the tool-result JSON and into a following multimodal user message. Never allow base64 image data to be serialized as model-visible text.
+OpenAI Responses, Anthropic, Google, xAI, and Codex accept image-bearing tool results directly. OpenAI-compatible Chat Completions and Alibaba do not: before Moonshot, OpenRouter, Qwen, or chat-completions OpenCode steps, `src/ai/chat-tool-images.ts` moves image files out of the tool-result JSON and into a following multimodal user message. Never allow base64 image data to be serialized as model-visible text.
 
 OpenCode models without native vision then go through `src/ai/describe-images.ts`: each remaining image part is sent to a vision-capable model on the same Zen or Go gateway, and the coding model receives the text description instead. Do not send raw images to a text-only OpenCode model.
 
 ## Security and provider boundary
 
-The browser uses the AI SDK's native Google, Alibaba/Qwen, OpenAI, Anthropic, and xAI providers directly. OpenRouter is called directly through the OpenAI chat provider against `https://openrouter.ai/api/v1`. Moonshot uses the OpenAI chat provider through the local `/api/moonshot` CORS proxy. OpenCode Zen and Go use the OpenAI chat provider through `/api/opencode/{zen|go}/v1` because `opencode.ai` does not answer browser CORS preflight.
+The browser uses the AI SDK's native Google, Alibaba/Qwen, OpenAI, Anthropic, and xAI providers directly. OpenRouter is called directly through the OpenAI chat provider against `https://openrouter.ai/api/v1`. Moonshot uses the OpenAI chat provider through the local `/api/moonshot` CORS proxy. OpenCode Zen and Go go through `/api/opencode/{zen|go}/v1` because `opencode.ai` does not answer browser CORS preflight.
+
+OpenCode is a multi-dialect gateway, not an OpenAI-compatible one. Each model answers on exactly one endpoint, and calling any other returns a 400 or an `Endpoint is unavailable` 5xx rather than routing itself. `src/ai/opencode-dialects.ts` owns the mapping and `src/ai/opencode-client.ts` builds the matching provider:
+
+| Dialect | Endpoint | Provider | Families |
+| --- | --- | --- | --- |
+| `responses` | `/v1/responses` | `@ai-sdk/openai` Responses | `gpt-*`, `grok-*`, `muse-spark-*` |
+| `messages` | `/v1/messages` | `@ai-sdk/anthropic` | `claude-*`, `qwen*`, `minimax-*` on Go only |
+| `google` | `/v1/models/<id>:…` | `@ai-sdk/google` | `gemini-*` |
+| `chat` | `/v1/chat/completions` | `@ai-sdk/openai` chat | everything else, including `minimax-*` on Zen |
+
+Match `src/ai/opencode-dialects.ts` against the endpoint tables at <https://opencode.ai/docs/zen> and <https://opencode.ai/docs/go> whenever OpenCode adds a family; prefixes are matched rather than exact ids because `/v1/models` only reports ids and keeps growing. Chat completions is the default for an unrecognised id because every open-weight family lands there. The proxy header allowlist in `scripts/opencode-proxy.ts` must keep carrying `x-api-key`, `anthropic-version`, `anthropic-beta`, and `x-goog-api-key` alongside `authorization`, or the non-OpenAI dialects lose their credentials.
 
 Codex is a separate no-API-key transport for hosted users. The browser pairs with `scripts/shotluma-codex-bridge.ts` on `127.0.0.1`; that process launches `codex app-server` over stdio and uses Codex's existing ChatGPT authentication. The user stays on `app.shotluma.com` and never needs a repository checkout or local Vite server.
 

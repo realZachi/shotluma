@@ -122,6 +122,12 @@ export const opencodeCatalogId = (
 export const opencodeProviderModelId = (catalogId: string): string =>
   catalogId.replace(/^opencode-(?:zen|go)\//, '')
 
+/** The upstream id to send for a catalog entry, preferring the stored mapping. */
+export const opencodeRequestModelId = (
+  catalogId: string,
+  providerModelId?: string,
+): string => providerModelId ?? opencodeProviderModelId(catalogId)
+
 const gatewayLabel = (providerId: OpencodeProviderId): string =>
   providerId === 'opencode-go' ? 'OpenCode Go' : 'OpenCode Zen'
 

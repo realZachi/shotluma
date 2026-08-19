@@ -4,10 +4,22 @@ export const OPENCODE_GO_UPSTREAM = 'https://opencode.ai/zen/go'
 const GO_PREFIX = '/api/opencode/go'
 const ZEN_PREFIX = '/api/opencode/zen'
 
+/**
+ * OpenCode serves each model on one of four dialects, so the proxy has to carry
+ * the auth and versioning headers of all of them: `authorization` for the
+ * OpenAI Responses and Chat Completions endpoints, `x-api-key` plus the
+ * `anthropic-*` headers for `/v1/messages`, and `x-goog-api-key` for the Gemini
+ * endpoint. Anything outside this list (cookies, origin, client hints) is
+ * dropped so the proxy stays a pure credential passthrough.
+ */
 export const OPENCODE_FORWARDED_HEADERS = [
   'authorization',
   'content-type',
   'accept',
+  'x-api-key',
+  'anthropic-version',
+  'anthropic-beta',
+  'x-goog-api-key',
 ] as const
 
 const joinUpstream = (origin: string, suffix: string): URL => {
