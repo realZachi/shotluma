@@ -78,7 +78,8 @@ Image bytes are kept out of project documents and out of the JS heap:
 - Persisted documents reference images as `blob-asset:<id>`; the running app renders object URLs. `src/asset-sources.ts` owns the pure walk over the fields that can carry an image source (uploads, background images, image elements, device screenshots).
 - Loading a project resolves references to object URLs; documents saved before the asset store existed carry inline data URLs, which are converted to stored Blobs on load and persisted as references on the next save.
 - Starting the app reads project summaries with a cursor, so only the active project document is fully retained in memory.
-- Deleting a project sweeps stored Blobs that no surviving project references.
+- Deleting a project sweeps stored Blobs that no surviving project references. The sweep deliberately keeps every asset seen in the current session: unsaved in-memory state and undo history can reference assets no persisted document mentions, so those Blobs stay until a later session's sweep. Object URLs are never revoked for the same reason — they pin disk-backed Blobs, not heap memory.
+- Sweeping scans and deletes in separate transactions. Concurrent editing from a second tab is not a supported model (the database open already rejects when another tab blocks an upgrade); a save racing a delete across tabs could at worst strand one `blob-asset:` reference, which renders as a missing image.
 
 Persistence is browser-local:
 

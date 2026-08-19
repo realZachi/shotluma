@@ -389,6 +389,7 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const cancelledRef = useRef(false)
+  const runActiveRef = useRef(false)
 
   const requestClose = () => {
     if (phase === 'running' || keysDialogOpen || codexDialogOpen) return
@@ -491,17 +492,19 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
   }
 
   const handleGenerate = async () => {
-    if (!canGenerate || phase === 'running') return
+    // The run is marked active before the asynchronous preparation await, so a
+    // second click cannot start a parallel run and the close/cancel guards
+    // already apply while attachments are still being stored.
+    if (!canGenerate || phase === 'running' || runActiveRef.current) return
+    runActiveRef.current = true
     const filesToPrepare = [
       ...screenshots.map((shot) => ({ name: shot.name, dataUrl: shot.dataUrl })),
       ...(!isEditMode && logo ? [{ name: logo.name, dataUrl: logo.dataUrl }] : []),
     ]
-    const prepared = await onPrepareRun(filesToPrepare)
-    const preparedScreenshots = prepared.slice(0, screenshots.length)
-    const preparedLogo = !isEditMode && logo ? prepared[screenshots.length] : undefined
     const abortController = new AbortController()
     abortControllerRef.current = abortController
     cancelledRef.current = false
+    const wasCancelled = () => cancelledRef.current
     setAssistantText('')
     setNarration(createNarrationState())
     setPlan([])
@@ -510,19 +513,34 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
     setErrorMessage(null)
     setDoneInfo(null)
     setPhase('running')
-    await runAiGeneration({
-      selection,
-      description,
-      screenshots: preparedScreenshots,
-      ...(!isEditMode && appName.trim() ? { appName: appName.trim() } : {}),
-      ...(preparedLogo ? { logo: preparedLogo } : {}),
-      controller,
-      ...(targetSlide ? { targetSlideId: targetSlide.id } : {}),
-      ...(htmlMode ? { htmlMode: true } : {}),
-      signal: abortController.signal,
-      onEvent: handleEvent,
-      ...(onActivity ? { onActivity } : {}),
-    })
+    try {
+      const prepared = await onPrepareRun(filesToPrepare)
+      if (wasCancelled()) return
+      const preparedScreenshots = prepared.slice(0, screenshots.length)
+      const preparedLogo = !isEditMode && logo ? prepared[screenshots.length] : undefined
+      await runAiGeneration({
+        selection,
+        description,
+        screenshots: preparedScreenshots,
+        ...(!isEditMode && appName.trim() ? { appName: appName.trim() } : {}),
+        ...(preparedLogo ? { logo: preparedLogo } : {}),
+        controller,
+        ...(targetSlide ? { targetSlideId: targetSlide.id } : {}),
+        ...(htmlMode ? { htmlMode: true } : {}),
+        signal: abortController.signal,
+        onEvent: handleEvent,
+        ...(onActivity ? { onActivity } : {}),
+      })
+    } catch (error) {
+      if (!wasCancelled()) {
+        setNarration(flushNarration)
+        setErrorMessage(error instanceof Error ? error.message : String(error))
+        setPhase('error')
+        onActivity?.(null)
+      }
+    } finally {
+      runActiveRef.current = false
+    }
   }
 
   const handleCancel = () => {

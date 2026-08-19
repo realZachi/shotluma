@@ -16,6 +16,9 @@ export const openDatabase = (): Promise<IDBDatabase> => {
     let settled = false
 
     const fail = (error: Error) => {
+      // A late error from an already-settled request must not clear a newer
+      // cached promise created by a retry.
+      if (settled) return
       settled = true
       databasePromise = null
       reject(error)

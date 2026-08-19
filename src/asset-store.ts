@@ -19,11 +19,15 @@ export const isAssetRef = (src: string) => src.startsWith(ASSET_REF_PREFIX)
 const assetIdFromRef = (src: string) => src.slice(ASSET_REF_PREFIX.length)
 
 // One object URL per asset per session. URLs are deliberately never revoked on
-// project switches: they only pin disk-backed Blobs, and reusing the same URL
-// string keeps src equality checks (background pickers, upload dedupe) working.
+// project switches: they only pin disk-backed Blobs (never heap strings), and
+// unsaved state or undo history may still reference any asset seen this
+// session, so revoking would break those references. Reusing the same URL
+// string also keeps src equality checks (background pickers, upload dedupe)
+// working. Data URLs are intentionally not memoized to their asset id — a
+// cache would pin the full base64 string in the heap; re-hashing on the rare
+// save that still carries one is cheaper than that.
 const objectUrlByAssetId = new Map<string, string>()
 const assetIdByObjectUrl = new Map<string, string>()
-const assetIdByDataUrl = new Map<string, string>()
 
 const toObjectUrl = (id: string, blob: Blob): string => {
   const cached = objectUrlByAssetId.get(id)
@@ -85,9 +89,7 @@ export const importBlobAsset = async (blob: Blob): Promise<string> => {
 /** Same fallback contract as {@link importBlobAsset}, for data URL inputs. */
 export const importDataUrlAsset = async (dataUrl: string): Promise<string> => {
   try {
-    const { id, url } = await storeBlobAsset(dataUrlToBlob(dataUrl))
-    assetIdByDataUrl.set(dataUrl, id)
-    return url
+    return (await storeBlobAsset(dataUrlToBlob(dataUrl))).url
   } catch {
     return dataUrl
   }
@@ -149,13 +151,12 @@ export const hydrateProjectAssets = async <T extends ProjectAssetSources>(projec
 export const dehydrateProjectAssets = async <T extends ProjectAssetSources>(project: T): Promise<T> => {
   const replacements = new Map<string, string>()
   for (const src of collectAssetSources(project)) {
-    const registeredId = assetIdByObjectUrl.get(src) ?? assetIdByDataUrl.get(src)
+    const registeredId = assetIdByObjectUrl.get(src)
     if (registeredId) {
       replacements.set(src, `${ASSET_REF_PREFIX}${registeredId}`)
     } else if (src.startsWith('data:')) {
       try {
         const { id } = await storeBlobAsset(dataUrlToBlob(src))
-        assetIdByDataUrl.set(src, id)
         replacements.set(src, `${ASSET_REF_PREFIX}${id}`)
       } catch {
         // Keep the data URL inline; the project still round-trips.
