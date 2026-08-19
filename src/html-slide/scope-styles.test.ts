@@ -52,4 +52,10 @@ describe('rewriteRootSelectors', () => {
     expect(rewriteRootSelectors('.body-copy { color: red; }')).toBe('.body-copy { color: red; }')
     expect(rewriteRootSelectors('.html-badge { color: red; }')).toBe('.html-badge { color: red; }')
   })
+
+  it('collapses chained root selectors into a single :scope', () => {
+    expect(rewriteRootSelectors('html body { margin: 0; }')).toBe(':scope { margin: 0; }')
+    expect(rewriteRootSelectors('html > body { margin: 0; }')).toBe(':scope { margin: 0; }')
+    expect(rewriteRootSelectors(':root body .screen { color: red; }')).toBe(':scope .screen { color: red; }')
+  })
 })

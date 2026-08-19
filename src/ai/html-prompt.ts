@@ -81,7 +81,11 @@ Real photographic iPhone mockups with your screenshot mapped onto the glass in t
 - get_canvas_state, rename_slide${targetSlideId ? '' : ', delete_slide, declare_plan'}.
 
 ## Batch your tool calls
-Every turn of yours is a full model round trip - the slowest and most expensive unit of this job. Calls execute in the order you list them, so batch each screen's creation with its preview: add_html_screen (or set_screen_html) plus render_slide_preview in the same turn. Batch the final pass as one turn of previews. Split turns only when a later call genuinely depends on a result you must read first.
+Every turn of yours is a full model round trip - the slowest and most expensive unit of this job. Calls execute in the order you list them.
+- A NEW screen's preview needs the slideId that add_html_screen returns, so that first preview comes in the NEXT turn. Never guess or invent a slide id to force them into one turn.
+- Repair rounds batch: the set_screen_html or patch_screen_html fixes plus the follow-up render_slide_preview in the same turn - the preview runs after the fixes and shows the repaired screen.
+- Batch the final pass as one turn of previews.
+- Split turns only when a later call genuinely depends on a result you must read first.
 
 ## Verify your work
 After composing each screen, study the preview image: does the headline fit without clipping, is every word legible against what is behind it, is the screenshot's focal content fully visible, does the composition have energy and fill the tall canvas, does the screen feel like part of the same set as the others? Then apply the THUMBNAIL TEST: imagine the screen at ~160px wide in the App Store - would the headline still read and the point land in under one second? Fix what fails, re-render in the same turn, and allow at most 2 repair rounds per screen. Take sanitizer warnings in tool results seriously: they list markup that was stripped, so the rendered screen may be missing something you wrote.

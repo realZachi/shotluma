@@ -50,6 +50,19 @@ const isAllowedCssUrl = (value: string): boolean => {
   return normalized.startsWith('data:image/') || normalized.startsWith('asset:')
 }
 
+// SVG presentation attributes (fill, filter, mask, clip-path, …) accept url()
+// references that the browser resolves as loads; only same-document fragments
+// are safe there.
+const SVG_URL_TOKEN = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]*))\s*\)/gi
+
+const hasNonFragmentSvgUrl = (value: string): boolean => {
+  for (const match of value.matchAll(SVG_URL_TOKEN)) {
+    const target = (match[1] ?? match[2] ?? match[3] ?? '').trim()
+    if (!target.startsWith('#')) return true
+  }
+  return false
+}
+
 // Regex-level scanning is deliberate: a full CSS parser is not needed to enforce
 // "no network loads", and anything unrecognized stays untouched inside the sandbox.
 const sanitizeCssText = (css: string, context: string, violations: string[]): string => {
@@ -92,9 +105,15 @@ const sanitizeAttributeValue = (element: Element, tagName: string, name: string,
     violations.push(`Removed external URL in "${name}" on <${tagName}>.`)
     return
   }
-  if (name !== 'style') return
-  const cleaned = sanitizeCssText(value, `the style attribute of <${tagName}>`, violations)
-  if (cleaned !== value) element.setAttribute(name, cleaned)
+  if (name === 'style') {
+    const cleaned = sanitizeCssText(value, `the style attribute of <${tagName}>`, violations)
+    if (cleaned !== value) element.setAttribute(name, cleaned)
+    return
+  }
+  if (element.namespaceURI === svgNamespace && hasNonFragmentSvgUrl(value)) {
+    element.removeAttribute(name)
+    violations.push(`Removed non-fragment url() in "${name}" on <${tagName}>.`)
+  }
 }
 
 const sanitizeAttribute = (element: Element, tagName: string, name: string, violations: string[]) => {

@@ -267,6 +267,15 @@ const collectStreamPart = <TOOLS extends ToolSet>(options: {
       onEvent({ type: 'tool', name: part.toolName, detail })
       break
     }
+    case 'tool-result': {
+      // add_html_screen can fail without creating anything (oversized markup);
+      // take the optimistic slide count back so the final report stays honest.
+      const output = part.output as { ok?: boolean } | null | undefined
+      if (part.toolName === 'add_html_screen' && output?.ok === false) {
+        accumulator.slidesCreated = Math.max(0, accumulator.slidesCreated - 1)
+      }
+      break
+    }
     case 'finish':
       accumulator.usage = toAiRunTokenUsage(part.totalUsage)
       accumulator.finishReason = part.finishReason

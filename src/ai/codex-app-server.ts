@@ -171,6 +171,22 @@ const serializeToolOutput = (output: unknown): {
   }
 }
 
+// Expected tool failures return `success: true` with an `{ ok: false }` payload,
+// so both layers must be checked to tell a real screen from a refused one.
+const isFailedDynamicToolResult = (
+  result: ReturnType<typeof serializeToolOutput>,
+): boolean => {
+  if (!result.success) return true
+  const first = result.contentItems[0]
+  if (first?.type !== 'inputText') return false
+  try {
+    const parsed: unknown = JSON.parse(first.text)
+    return isObject(parsed) && parsed['ok'] === false
+  } catch {
+    return false
+  }
+}
+
 const serializeToolFailure = (error: unknown) => ({
   success: false,
   contentItems: [{
@@ -452,6 +468,11 @@ export const runCodexAppServerGeneration = async (
       tools,
       ...(options.signal ? { signal: options.signal } : {}),
     })
+    // add_html_screen can fail without creating anything (oversized markup);
+    // take the optimistic slide count back so the final report stays honest.
+    if (request.toolName === 'add_html_screen' && isFailedDynamicToolResult(result)) {
+      slidesCreated = Math.max(0, slidesCreated - 1)
+    }
     await client.respond(request.requestId, result)
   }
 

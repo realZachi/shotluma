@@ -18,8 +18,12 @@
 // them for full-screen backgrounds, so retarget them at the scope root.
 const ROOT_SELECTOR_PATTERN = /(^|[\s,{}])(?:body|html|:root)\b/gi
 
+// `html body` would become `:scope :scope`, which can never match because the
+// scope root is not its own descendant — collapse root chains to one `:scope`.
+const SCOPE_CHAIN_PATTERN = /:scope(?:\s*[>~+]?\s*:scope)+/g
+
 export const rewriteRootSelectors = (css: string): string =>
-  css.replace(ROOT_SELECTOR_PATTERN, '$1:scope')
+  css.replace(ROOT_SELECTOR_PATTERN, '$1:scope').replace(SCOPE_CHAIN_PATTERN, ':scope')
 
 export const scopeSlideStyles = (container: HTMLElement): void => {
   for (const style of Array.from(container.querySelectorAll('style'))) {

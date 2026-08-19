@@ -54,6 +54,23 @@ describe('screen html sanitization', () => {
     ])
   })
 
+  it('strips non-fragment url() references from svg presentation attributes', () => {
+    const result = sanitizeScreenHtml([
+      '<svg viewBox="0 0 10 10">',
+      '<rect fill="url(#grad)" filter="url(https://evil.test/f.svg#f)"></rect>',
+      '<circle mask="url(&quot;https://evil.test/m.svg#m&quot;)" clip-path="url(#clip)"></circle>',
+      '</svg>',
+    ].join(''))
+
+    expect(result.html).toContain('fill="url(#grad)"')
+    expect(result.html).toContain('clip-path="url(#clip)"')
+    expect(result.html).not.toContain('evil.test')
+    expect(result.violations).toEqual([
+      'Removed non-fragment url() in "filter" on <rect>.',
+      'Removed non-fragment url() in "mask" on <circle>.',
+    ])
+  })
+
   it('removes an img left without a src entirely so rasterization cannot fail on it', () => {
     const result = sanitizeScreenHtml('<div><img src="https://evil.test/x.png"><img></div>')
     expect(result.html).toBe('<div></div>')
