@@ -14,13 +14,22 @@
  * computed styles per element when cloning.
  */
 
+// CSS comments act as whitespace in selectors, so they separate tokens too.
+const CSS_SEPARATOR = String.raw`(?:\s|\/\*[\s\S]*?\*\/)`
+
 // `body`, `html`, and `:root` cannot match inside a scoped subtree; models use
 // them for full-screen backgrounds, so retarget them at the scope root.
-const ROOT_SELECTOR_PATTERN = /(^|[\s,{}])(?:body|html|:root)\b/gi
+const ROOT_SELECTOR_PATTERN = new RegExp(
+  `(^|[,{}]|${CSS_SEPARATOR})(?:body|html|:root)\\b`,
+  'gi',
+)
 
 // `html body` would become `:scope :scope`, which can never match because the
 // scope root is not its own descendant — collapse root chains to one `:scope`.
-const SCOPE_CHAIN_PATTERN = /:scope(?:\s*[>~+]?\s*:scope)+/g
+const SCOPE_CHAIN_PATTERN = new RegExp(
+  `:scope(?:${CSS_SEPARATOR}*[>~+]?${CSS_SEPARATOR}*:scope)+`,
+  'g',
+)
 
 export const rewriteRootSelectors = (css: string): string =>
   css.replace(ROOT_SELECTOR_PATTERN, '$1:scope').replace(SCOPE_CHAIN_PATTERN, ':scope')

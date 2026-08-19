@@ -58,4 +58,9 @@ describe('rewriteRootSelectors', () => {
     expect(rewriteRootSelectors('html > body { margin: 0; }')).toBe(':scope { margin: 0; }')
     expect(rewriteRootSelectors(':root body .screen { color: red; }')).toBe(':scope .screen { color: red; }')
   })
+
+  it('treats CSS comments as selector separators', () => {
+    expect(rewriteRootSelectors('html /* root */ body { margin: 0; }')).toBe(':scope { margin: 0; }')
+    expect(rewriteRootSelectors('html/**/body { margin: 0; }')).toBe(':scope { margin: 0; }')
+  })
 })
