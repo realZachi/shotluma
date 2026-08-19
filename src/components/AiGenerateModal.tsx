@@ -6,8 +6,15 @@ import {
   type RefObject,
 } from 'react'
 import {
+  isOpencodeProviderId,
+  pickOpencodeVisionModel,
+} from '../ai/opencode-models'
+import {
   clampAiReasoningEffort,
-  findAiModelById,
+  getAiModel,
+  getAiProvider,
+  getDynamicProviderModels,
+  modelSupportsVision,
   type AiModelSelection,
   type AiProviderId,
 } from '../ai/provider-catalog'
@@ -53,6 +60,28 @@ const toImageDrafts = async (files: File[], idPrefix: 'logo' | 'shot'): Promise<
     name: file.name,
     dataUrl: await fileToDataUrl(file),
   })))
+
+const nextAiSelection = (
+  provider: AiProviderId,
+  modelId: string,
+  current: AiModelSelection,
+): AiModelSelection => {
+  const model = getAiModel({ provider, model: modelId })
+  const reasoningEffort = clampAiReasoningEffort(model, current.reasoningEffort)
+  const visionModel = isOpencodeProviderId(provider) && !modelSupportsVision(model)
+    ? pickOpencodeVisionModel(
+      provider,
+      [...getAiProvider(provider).models, ...getDynamicProviderModels(provider)],
+      current.provider === provider ? current.visionModel : undefined,
+    )?.id
+    : undefined
+  return {
+    provider,
+    model: modelId,
+    ...(reasoningEffort ? { reasoningEffort } : {}),
+    ...(visionModel ? { visionModel } : {}),
+  }
+}
 
 export type AiGenerateModalProps = {
   open: boolean
@@ -320,6 +349,7 @@ const ModalFooter = ({
   transportAvailability,
   onModelSelect,
   onReasoningEffortChange,
+  onVisionModelChange,
   onManageKeys,
   onConnectCodex,
   onGenerate,
@@ -331,6 +361,7 @@ const ModalFooter = ({
   transportAvailability: AiProviderAvailability
   onModelSelect: (provider: AiProviderId, modelId: string) => void
   onReasoningEffortChange: (reasoningEffort: NonNullable<AiModelSelection['reasoningEffort']>) => void
+  onVisionModelChange: (visionModel: string) => void
   onManageKeys: (providerId: AiProviderId) => void
   onConnectCodex: () => void
   onGenerate: () => void
@@ -342,6 +373,7 @@ const ModalFooter = ({
       transportAvailability={transportAvailability}
       onModelSelect={onModelSelect}
       onReasoningEffortChange={onReasoningEffortChange}
+      onVisionModelChange={onVisionModelChange}
       onManageKeys={onManageKeys}
       onConnectCodex={onConnectCodex}
     />
@@ -452,19 +484,15 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
   const removeScreenshot = (id: string) => setScreenshots((current) => current.filter((shot) => shot.id !== id))
 
   const handleModelSelect = (provider: AiProviderId, modelId: string) => {
-    const { model } = findAiModelById(modelId)
-    const reasoningEffort = clampAiReasoningEffort(model, selection.reasoningEffort)
-    setSelection({
-      provider,
-      model: modelId,
-      ...(reasoningEffort ? { reasoningEffort } : {}),
-    })
+    setSelection(nextAiSelection(provider, modelId, selection))
   }
 
   const handleEvent = (event: AiRunEvent) => {
     if (cancelledRef.current) return
     if (event.type === 'tool') {
       setLatestActivity(event.detail)
+    } else if (event.type === 'status') {
+      setLatestActivity(event.message)
     } else if (event.type === 'plan') setPlan(event.screens)
     // `index` is the count of screens finished before this one, which is exactly the
     // rail's "built" count while this screen is in progress.
@@ -483,7 +511,7 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
       setPhase('done')
       onActivity?.(null)
       onFinished(event.slidesCreated)
-    } else if (event.type === 'error') {
+    } else {
       setNarration(flushNarration)
       setErrorMessage(event.message)
       setPhase('error')
@@ -626,6 +654,9 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
               onModelSelect={handleModelSelect}
               onReasoningEffortChange={(reasoningEffort) => {
                 setSelection((current) => ({ ...current, reasoningEffort }))
+              }}
+              onVisionModelChange={(visionModel) => {
+                setSelection((current) => ({ ...current, visionModel }))
               }}
               onManageKeys={handleManageKeys}
               onConnectCodex={handleConnectCodex}

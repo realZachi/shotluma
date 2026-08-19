@@ -27,7 +27,7 @@ Use Bun for all package and script operations. Never use npm or manually edit `b
 - Keep editor mutations immutable; undo/redo snapshots depend on it.
 - This public repository owns only the editor. The production marketing site is maintained privately and deployed separately; never add its source, styles, assets, or production-only configuration here.
 - Never commit secrets, private screenshots, unlicensed assets, PSD/PSB files, or generated `dist/`.
-- AI provider keys are entered in the browser (stored in `localStorage`) with optional `.env.local` `VITE_*` fallback for local dev; only Moonshot uses the local CORS proxy. Never commit `.env.local` or deploy a keyed build.
+- AI provider keys are entered in the browser (stored in `localStorage`) with optional `.env.local` `VITE_*` fallback for local dev; Moonshot and OpenCode use a same-origin CORS proxy. Never commit `.env.local` or deploy a keyed build.
 - Use shadcn/Base UI and Hugeicons for editor chrome. Do not add a parallel UI or token system.
 - Update generated `src/components/ui/` files only with the shadcn CLI.
 - Use Conventional Commit messages and keep commits independently coherent.

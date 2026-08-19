@@ -1,17 +1,21 @@
 import { useEffect, useId, useMemo, useState } from 'react'
-import {
-  loadOpenRouterModels,
-  type OpenRouterModelsResult,
-} from '../ai/openrouter-models'
 import { Search01 } from './icons'
 import { Input } from './ui/input'
 import type { AiModelOption } from '../ai/provider-catalog'
 
 const VISIBLE_MODEL_LIMIT = 60
 
-export type OpenRouterModelBrowserProps = {
+export type CatalogModelsResult = {
+  models: readonly AiModelOption[]
+  source: 'remote' | 'cache' | 'fallback'
+}
+
+export type AiCatalogModelBrowserProps = {
+  heading: string
   selectedModelId: string
   onModelSelect: (modelId: string) => void
+  loadModels: () => Promise<CatalogModelsResult>
+  fallbackNote?: string
 }
 
 const filterModels = (
@@ -26,26 +30,30 @@ const filterModels = (
 }
 
 /**
- * Searchable list over the full OpenRouter catalog (vision + tools capable
- * models only). Shown in the model picker once the OpenRouter provider is
- * selected; the curated shortlist stays in the grouped select above.
+ * Searchable list over a runtime provider catalog. Shown in the model picker
+ * once the user chooses "Other models…".
  */
-export const OpenRouterModelBrowser = ({
+export const AiCatalogModelBrowser = ({
+  heading,
   selectedModelId,
   onModelSelect,
-}: OpenRouterModelBrowserProps) => {
+  loadModels,
+  fallbackNote = 'Model list could not be loaded — showing the built-in shortlist.',
+}: AiCatalogModelBrowserProps) => {
   const labelId = useId()
   const [query, setQuery] = useState('')
-  const [result, setResult] = useState<OpenRouterModelsResult | null>(null)
+  const [result, setResult] = useState<CatalogModelsResult | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    void loadOpenRouterModels().then((loaded) => {
+    void loadModels().then((loaded) => {
       if (!cancelled) setResult(loaded)
     })
     return () => {
       cancelled = true
     }
+    // Load once when this catalog panel mounts; the parent remounts it per provider.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const models = useMemo(
@@ -58,7 +66,7 @@ export const OpenRouterModelBrowser = ({
   return (
     <div className="ai-model-picker-section">
       <span className="ai-model-picker-section__label" id={labelId}>
-        {result ? `All OpenRouter models (${models.length})` : 'All OpenRouter models'}
+        {result ? `${heading} (${models.length})` : heading}
       </span>
       <div className="ai-openrouter-search">
         <Search01 size={13} aria-hidden="true" />
@@ -72,7 +80,7 @@ export const OpenRouterModelBrowser = ({
       </div>
       {result?.source === 'fallback' && (
         <small className="ai-openrouter-note" role="status">
-          Model list could not be loaded — showing the built-in shortlist.
+          {fallbackNote}
         </small>
       )}
       <div className="ai-openrouter-list" role="listbox" aria-labelledby={labelId}>

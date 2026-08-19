@@ -10,11 +10,23 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const aiLoggingValue = env['SHOTLUMA_AI_LOGGING'] ?? env['FRAMEFLOW_AI_LOGGING']
   const isAiLoggingEnabled = aiLoggingValue?.trim().toLowerCase() === 'true'
-  const moonshotProxy = {
+  const moonshotAndOpencodeProxy = {
     '/api/moonshot': {
       target: 'https://api.moonshot.ai',
       changeOrigin: true,
       rewrite: (requestPath: string) => requestPath.replace(/^\/api\/moonshot/, ''),
+    },
+    '/api/opencode/go': {
+      target: 'https://opencode.ai',
+      changeOrigin: true,
+      rewrite: (requestPath: string) =>
+        requestPath.replace(/^\/api\/opencode\/go/, '/zen/go') || '/zen/go',
+    },
+    '/api/opencode/zen': {
+      target: 'https://opencode.ai',
+      changeOrigin: true,
+      rewrite: (requestPath: string) =>
+        requestPath.replace(/^\/api\/opencode\/zen/, '/zen') || '/zen',
     },
   }
 
@@ -40,10 +52,10 @@ export default defineConfig(({ command, mode }) => {
     server: {
       host: '127.0.0.1',
       port: Number(process.env['PORT']) || 4173,
-      proxy: moonshotProxy,
+      proxy: moonshotAndOpencodeProxy,
     },
     preview: {
-      proxy: moonshotProxy,
+      proxy: moonshotAndOpencodeProxy,
     },
   }
 })
