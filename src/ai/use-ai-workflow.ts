@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { importDataUrlAsset } from '../asset-store'
 import { uid } from '../utils'
 import { createAiController } from './controller'
 import type { Slide, UploadAsset } from '../types'
@@ -127,21 +128,26 @@ export function useAiWorkflow({
     return () => window.clearTimeout(timer)
   }, [activity])
 
-  const prepareRun = useCallback((files: { name: string; dataUrl: string }[]) => {
+  const prepareRun = useCallback(async (files: { name: string; dataUrl: string }[]) => {
     checkpoint()
     clearSelection()
     preRunSlideIds.current = new Set(slidesRef.current.map((slide) => slide.id))
     const bySource = new Map(uploadsRef.current.map((asset) => [asset.src, asset]))
     const additions: UploadAsset[] = []
-    const prepared = files.map((file) => {
-      let asset = bySource.get(file.dataUrl)
+    const prepared: { assetId: string; name: string; dataUrl: string }[] = []
+    for (const file of files) {
+      // Uploads render from the stored Blob's object URL; the provider payload
+      // keeps the original data URL because AI requests need base64 content.
+      // Content-hashed storage makes re-attaching the same image dedupe here.
+      const src = await importDataUrlAsset(file.dataUrl)
+      let asset = bySource.get(src)
       if (!asset) {
-        asset = { id: uid('upload'), name: file.name, src: file.dataUrl }
+        asset = { id: uid('upload'), name: file.name, src }
         additions.push(asset)
         bySource.set(asset.src, asset)
       }
-      return { assetId: asset.id, name: asset.name, dataUrl: asset.src }
-    })
+      prepared.push({ assetId: asset.id, name: asset.name, dataUrl: file.dataUrl })
+    }
     if (additions.length > 0) {
       uploadsRef.current = [...additions, ...uploadsRef.current]
       setUploads(uploadsRef.current)

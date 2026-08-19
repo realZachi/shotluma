@@ -34,7 +34,7 @@ Codex is a separate no-API-key transport for hosted users. The browser pairs wit
 - Do not add a proxy for providers whose browser API supports the required CORS flow. Moonshot is available only on localhost through `/api/moonshot`; a hosted deployment that offers Moonshot or must hide keys needs a separate authenticated backend design. OpenCode is the exception that is proxied in production as well: `scripts/shotluma-worker.ts` rewrites `/api/opencode/*` to `opencode.ai` without reading or storing the caller's key.
 - Never return secrets or raw data URLs in model-visible state.
 - Keep uploads browser-local except for screenshots and app logos explicitly included in an AI run.
-- In generate mode, collect app name and app logo separately from the app description and screenshots. Pass the name and logo asset id through the user message, attach the logo image, and instruct the model to place the logo with `add_image` (never as a device screenshot).
+- In generate mode, collect app name and app logo separately from the app description and screenshots. Pass the name and logo asset id through the user message and attach the logo image. Instruct the model to place the logo with `add_image` in element runs and with an `<img src="asset:…">` tag in HTML screen runs — never as a device screenshot.
 - Keep developer AI run logging gated by `SHOTLUMA_AI_LOGGING` and write only
   through the local Vite middleware to the git-ignored `ai-logs/` directory.
   Persist only the versioned, bounded log schema: never add input prompt text,
@@ -58,6 +58,19 @@ The model mutates the editor only through the tools composed by `src/ai/tools.ts
 - Overlay assets (opt-in via the generate modal): `create_overlay_asset` calls OpenAI `gpt-image-2` through the AI SDK `generateImage` API and registers the result with `AiEditorController.addAsset`. Because `gpt-image-2` cannot emit transparency, generation always uses a flat `#FF00FF` chroma-key backdrop (`src/ai/overlay-asset-prompt.ts`). `remove_asset_background` then strips that key in-browser via Canvas (`src/ai/remove-chroma-key-background.ts`, pure pixel math in `src/ai/chroma-key.ts`) and registers a transparent PNG. The key color is measured per image with `detectChromaKey` rather than assumed to be `#FF00FF` — the model only approximates the requested backdrop, and keying against the nominal color leaves the whole background half-transparent (a pink haze). Keep the ramp wide, keep the despill pass, and keep reporting `backgroundCleared` so a failed key is visible instead of silently shipping a hazy asset. Do not use these tools for mockups, device frames, or full screens — only cutout elements placed with `add_image`. Require a resolved OpenAI key (browser storage or local-dev `VITE_OPENAI_API_KEY`) even when the chat model uses another provider. Never log generated image payloads.
 - Overlay generation is budgeted: `OVERLAY_ASSET_BUDGET` in `src/ai/overlay-asset-prompt.ts` caps `create_overlay_asset` calls per run, counted per `createOverlayAssetTools` instance and consumed by failed attempts too, so a retry loop cannot burn the OpenAI key. The prompt section in `src/ai/prompt.ts` and the tool descriptions must keep stating the same number — read it from the constant rather than hardcoding it.
 
+## HTML screen mode (experimental)
+
+An opt-in generate-dialog toggle lets the model author whole screens as HTML documents (`Slide.html`) instead of driving the element tools. Invariants:
+
+- **The sanitizer is the security boundary.** Every model-authored markup passes `sanitizeScreenHtml` (`src/html-slide/sanitize.ts`) before storage AND again at render in `HtmlSlideContent`. It must keep rejecting scripts, event handlers, animation elements, and every external URL — in attributes and in CSS `url()` alike; only `asset:` and `data:image/` schemes pass. API keys live in `localStorage`, so weakening the sanitizer is a credential-exfiltration vector (including via prompt injection through screenshots). Never render model HTML through any other path.
+- Keep the prompt (`src/ai/html-prompt.ts`), the sanitizer allowlists, and the `<shotluma-device>` contract (`src/html-slide/device-attributes.ts`, mockup ids and aspect ratios from `src/mockups/catalog.ts`) telling the same story. A prompt that promises markup the sanitizer strips produces silent quality loss.
+- HTML screens are authored at the native `1290 × 2796` px size; CSS pixels there are export pixels. The scale factor lives in `src/styles/base.css` (`.html-slide-scale`).
+- **Styles must stay scoped per screen.** All screens render into one document, and models reuse class names across a set, so `HtmlSlideContent` wraps every `<style>` block in a prelude-less `@scope to (shotluma-device > *)` at render time (`src/html-slide/scope-styles.ts`). Without this, the newest screen's stylesheet restyles every earlier screen — which looks exactly like the AI rewriting screens it never touched. The donut limit keeps slide CSS out of the hydrated mockup markup; `body`/`html`/`:root` selectors are retargeted at the scope root. Export is unaffected because `html-to-image` inlines computed styles.
+- The two worlds never convert into each other: edit runs pick the toolset by the target slide's kind (element slides → element tools, HTML slides → `set_screen_html`/`patch_screen_html`), and `AiEditorController` refuses element mutations on HTML slides and `setSlideHtml` on element slides. The editor UI rejects manual element, background, and template actions on HTML screens with a toast.
+- `patch_screen_html` replaces exactly one unique occurrence and must fail with a structured error (not found / ambiguous) without touching the slide, so the model can fall back to `set_screen_html`.
+- `add_html_screen` counts as `slide-started` for the run band's plan rail, exactly like `add_slides` — keep both the direct-provider and Codex paths in sync on this.
+- Overlay assets and screen spanning are not offered in HTML mode. One-run-one-undo-checkpoint applies unchanged.
+
 ## Editor integration
 
 The controller adapter must update `slidesRef` synchronously before React state because multiple tool calls can read and write in one tick. Preserve the non-history adapter and create one checkpoint before a run so the entire generation remains one undo step.
@@ -75,7 +88,7 @@ Clear selection before generation and preview capture. Any live overlay must car
 - Keep the prompt's repair-round limit aligned with preview behavior.
 - Keep AI-generated canvas copy and completion summaries in English, regardless of the language used in the request.
 
-Rich text comes from structured highlights through `src/ai/richtext.ts`. The model never writes raw HTML. `sanitizeRichText` remains the final whitelist.
+Rich text comes from structured highlights through `src/ai/richtext.ts`. In the element toolset the model never writes raw HTML; `sanitizeRichText` remains the final whitelist. The one deliberate exception is the HTML screen mode below, which has its own, stricter sanitizer.
 
 Canvas copy from `add_text` / `update_element` passes through `normalizeAiCopy` (`src/ai/normalize-copy.ts`) so double-escaped `\n` sequences become real line breaks before they hit the element. Do not rely on a preview repair round for that.
 

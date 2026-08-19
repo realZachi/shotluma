@@ -1,7 +1,8 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { importBlobAsset } from '../asset-store'
 import { makeTemplate } from '../data'
 import { getDevicePlacement } from '../mockups/catalog'
-import { fileToDataUrl, uid } from '../utils'
+import { uid } from '../utils'
 import { freshElementIds } from './element-utils'
 import { panelRevealForAddedSlide, removeSlide } from './slide-operations'
 import type {
@@ -157,13 +158,22 @@ export function useEditorActions({
   setUploads,
   setToast,
 }: EditorActionsOptions) {
+  // AI-authored HTML screens have no element or background layers; manual
+  // edits would be invisible, so every mutation path rejects them with a hint.
+  const rejectHtmlSlideEdit = useCallback(() => {
+    if (activeSlide?.html === undefined) return false
+    setToast('This screen was generated as HTML — edit it with AI')
+    return true
+  }, [activeSlide, setToast])
+
   const addElement = useCallback((element: CanvasElement, tool?: ToolId) => {
+    if (rejectHtmlSlideEdit()) return
     commit((current) => current.map((slide) => slide.id === activeSlideId
       ? { ...slide, elements: [...slide.elements, element] }
       : slide))
     setSelectedElementId(element.id)
     if (tool) setActiveTool(tool)
-  }, [activeSlideId, commit, setActiveTool, setSelectedElementId])
+  }, [activeSlideId, commit, rejectHtmlSlideEdit, setActiveTool, setSelectedElementId])
 
   const updateSelected = useCallback((patch: Partial<CanvasElement>) => {
     if (!selectedElementId) return
@@ -262,7 +272,7 @@ export function useEditorActions({
     const assets = await Promise.all(accepted.map(async (file) => ({
       id: uid('upload'),
       name: file.name,
-      src: await fileToDataUrl(file),
+      src: await importBlobAsset(file),
     })))
     setUploads((current) => [...assets, ...current])
     if (assets.length > 0) {
@@ -271,13 +281,14 @@ export function useEditorActions({
   }, [setToast, setUploads])
 
   const uploadToSelectedDevice = useCallback(async (file: File) => {
-    const asset = { id: uid('upload'), name: file.name, src: await fileToDataUrl(file) }
+    const asset = { id: uid('upload'), name: file.name, src: await importBlobAsset(file) }
     setUploads((current) => [asset, ...current])
     setDeviceImage(asset)
   }, [setDeviceImage, setUploads])
 
   const uploadBackgroundImage = useCallback(async (file: File) => {
-    const asset = { id: uid('upload'), name: file.name, src: await fileToDataUrl(file) }
+    if (rejectHtmlSlideEdit()) return
+    const asset = { id: uid('upload'), name: file.name, src: await importBlobAsset(file) }
     setUploads((current) => [asset, ...current])
     commit((current) => current.map((slide) => slide.id === activeSlideId
       ? {
@@ -294,17 +305,17 @@ export function useEditorActions({
         }
       : slide))
     setToast('Image set as background')
-  }, [activeSlideId, commit, setToast, setUploads])
+  }, [activeSlideId, commit, rejectHtmlSlideEdit, setToast, setUploads])
 
   const applyTemplate = useCallback((template: TemplateId) => {
-    if (!activeSlide) return
+    if (!activeSlide || rejectHtmlSlideEdit()) return
     const replacement = makeTemplate(template, activeSlide.name)
     commit((current) => current.map((slide) => slide.id === activeSlideId
       ? { ...replacement, id: activeSlideId }
       : slide))
     setSelectedElementId(null)
     setToast('Template applied')
-  }, [activeSlide, activeSlideId, commit, setSelectedElementId, setToast])
+  }, [activeSlide, activeSlideId, commit, rejectHtmlSlideEdit, setSelectedElementId, setToast])
 
   const duplicateSelected = useCallback(() => {
     if (!selectedElement) return
@@ -422,10 +433,11 @@ export function useEditorActions({
   }, [commit])
 
   const updateBackground = useCallback((patch: Partial<Background>) => {
+    if (rejectHtmlSlideEdit()) return
     commit((current) => current.map((slide) => slide.id === activeSlideId
       ? { ...slide, background: { ...slide.background, ...patch } }
       : slide))
-  }, [activeSlideId, commit])
+  }, [activeSlideId, commit, rejectHtmlSlideEdit])
 
   return {
     updateSelected,

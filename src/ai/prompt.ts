@@ -5,7 +5,44 @@ type AiPromptOptions = {
   appName?: string
   logoAssetId?: string
   enableOverlayAssets?: boolean
+  /** Adjusts asset/logo placement wording to the HTML screen toolset. */
+  htmlMode?: boolean
 }
+
+// Shared between the element-tool prompt (buildInstructions) and the HTML
+// screen prompt (buildHtmlInstructions); the design rules are mode-agnostic.
+export const COPYWRITING_RULES = `Screenshots are advertisements, not documentation. Every slide sells exactly ONE idea - a moment, an outcome, or a killed pain - never a UI tour.
+Iron rules for headlines:
+- One idea per headline. Never join two things with "and".
+- Short, common words of 1-2 syllables. Skip jargon unless it is the domain's own language.
+- 3-5 words per line. Use \\n to break lines intentionally - where a line breaks is part of the design, not an accident of wrapping.
+Write each headline as one of three types:
+- Paint a moment the user sees themselves in: "Check your coffee without opening the app."
+- State an outcome, the life after: "A home for every coffee you buy."
+- Kill a pain by naming and destroying it: "Never waste a great bag of coffee."
+Weak copy names features; strong copy names benefits: "Track habits and stay motivated" -> "Keep your streak alive". "Organize tasks with AI summaries" -> "Turn notes into next steps". "Save recipes with tags and favorites" -> "Find dinner fast".`
+
+export const FONT_LIBRARY_RULES = `- 'Bricolage Grotesque Variable': expressive display grotesque, great for headlines. Weights 200-800.
+- 'Syne Variable': distinctive geometric display face. Variable weights; use 500-800.
+- 'Bebas Neue': condensed all-caps display face. Only weight 400 is loaded.
+- 'Archivo Black': ultra-bold condensed display face for punchy headlines. Only weight 400 is loaded.
+- 'Anton': heavy condensed all-caps display face. Only weight 400 is loaded.
+- 'Instrument Sans Variable': clean neutral sans, for body copy and UI-style labels. Weights 400-700.
+- 'Manrope Variable': polished modern sans. Variable weights; good for supporting copy.
+- 'Outfit Variable': geometric modern sans for headlines and UI labels. Variable weights.
+- 'Plus Jakarta Sans Variable': friendly contemporary sans for body and supporting copy. Variable weights.
+- 'Sora Variable': soft geometric sans for clean marketing layouts. Variable weights.
+- 'Inter Tight Variable': compact neutral sans for dense labels and captions. Variable weights.
+- 'Fraunces': editorial serif. Only weight 600 is loaded - always use fontWeight 600 with it.
+- 'Playfair Display': high-contrast editorial serif. Weights 600 and 700 are loaded.
+- 'DM Serif Display': confident editorial display serif. Only weight 400 is loaded.
+- 'Libre Baskerville': classic book serif for refined body or pull quotes. Weights 400 and 700 are loaded.
+- 'Cormorant Garamond': elegant high-contrast serif for luxury headlines. Weights 400, 600, and 700 are loaded.
+- 'Space Mono': technical monospace. Weights 400 and 700 are loaded.
+- 'JetBrains Mono': developer-style monospace for code accents and tech labels. Weights 400 and 700 are loaded.
+- 'Caveat': handwritten accent face. Weights 400 and 700 are loaded; use sparingly.
+- 'Permanent Marker': bold marker handwritten accent. Only weight 400 is loaded; use sparingly.
+- 'Arial, sans-serif': plain fallback. Avoid unless the user specifically asks for a plain/generic look.`
 
 export function buildInstructions(options: AiPromptOptions = {}): string {
   const { targetSlideId, enableOverlayAssets } = options
@@ -137,16 +174,7 @@ FILL THE FRAME: whatever the archetype, the composition must claim the full 2796
 ${layoutContext}
 
 ## Copywriting
-Screenshots are advertisements, not documentation. Every slide sells exactly ONE idea - a moment, an outcome, or a killed pain - never a UI tour.
-Iron rules for headlines:
-- One idea per headline. Never join two things with "and".
-- Short, common words of 1-2 syllables. Skip jargon unless it is the domain's own language.
-- 3-5 words per line. Use \\n to break lines intentionally - where a line breaks is part of the design, not an accident of wrapping.
-Write each headline as one of three types:
-- Paint a moment the user sees themselves in: "Check your coffee without opening the app."
-- State an outcome, the life after: "A home for every coffee you buy."
-- Kill a pain by naming and destroying it: "Never waste a great bag of coffee."
-Weak copy names features; strong copy names benefits: "Track habits and stay motivated" -> "Keep your streak alive". "Organize tasks with AI summaries" -> "Turn notes into next steps". "Save recipes with tags and favorites" -> "Find dinner fast".
+${COPYWRITING_RULES}
 
 ## Verify your work
 Every mutating tool (add_text, add_device, add_shape, add_image, set_device_screenshot, update_element) returns the element's real rendered bounding box plus warnings involving that element. Read them after every call; render_slide_preview supplies the deduplicated slide-wide warnings.
@@ -179,27 +207,7 @@ ${brandRule}
 ${assetRule}
 
 ## Fonts
-- 'Bricolage Grotesque Variable': expressive display grotesque, great for headlines. Weights 200-800.
-- 'Syne Variable': distinctive geometric display face. Variable weights; use 500-800.
-- 'Bebas Neue': condensed all-caps display face. Only weight 400 is loaded.
-- 'Archivo Black': ultra-bold condensed display face for punchy headlines. Only weight 400 is loaded.
-- 'Anton': heavy condensed all-caps display face. Only weight 400 is loaded.
-- 'Instrument Sans Variable': clean neutral sans, for body copy and UI-style labels. Weights 400-700.
-- 'Manrope Variable': polished modern sans. Variable weights; good for supporting copy.
-- 'Outfit Variable': geometric modern sans for headlines and UI labels. Variable weights.
-- 'Plus Jakarta Sans Variable': friendly contemporary sans for body and supporting copy. Variable weights.
-- 'Sora Variable': soft geometric sans for clean marketing layouts. Variable weights.
-- 'Inter Tight Variable': compact neutral sans for dense labels and captions. Variable weights.
-- 'Fraunces': editorial serif. Only weight 600 is loaded - always use fontWeight 600 with it.
-- 'Playfair Display': high-contrast editorial serif. Weights 600 and 700 are loaded.
-- 'DM Serif Display': confident editorial display serif. Only weight 400 is loaded.
-- 'Libre Baskerville': classic book serif for refined body or pull quotes. Weights 400 and 700 are loaded.
-- 'Cormorant Garamond': elegant high-contrast serif for luxury headlines. Weights 400, 600, and 700 are loaded.
-- 'Space Mono': technical monospace. Weights 400 and 700 are loaded.
-- 'JetBrains Mono': developer-style monospace for code accents and tech labels. Weights 400 and 700 are loaded.
-- 'Caveat': handwritten accent face. Weights 400 and 700 are loaded; use sparingly.
-- 'Permanent Marker': bold marker handwritten accent. Only weight 400 is loaded; use sparingly.
-- 'Arial, sans-serif': plain fallback. Avoid unless the user specifically asks for a plain/generic look.
+${FONT_LIBRARY_RULES}
 
 ## Language
 Write all on-canvas copy (headlines, supporting text, labels) in English, regardless of the language used in the user's request.
@@ -229,7 +237,9 @@ export function buildUserMessage(
       ? `App name: ${options.appName.trim()}`
       : null,
     options.logoAssetId
-      ? `App logo asset id: ${options.logoAssetId} (use add_image with this id; do not treat it as a device screenshot)`
+      ? options.htmlMode
+        ? `App logo asset id: ${options.logoAssetId} (place with an <img src="asset:${options.logoAssetId}"> tag; never inside a <shotluma-device> screenshot)`
+        : `App logo asset id: ${options.logoAssetId} (use add_image with this id; do not treat it as a device screenshot)`
       : null,
   ].filter((line): line is string => Boolean(line))
   const brandContext = brandLines.length > 0

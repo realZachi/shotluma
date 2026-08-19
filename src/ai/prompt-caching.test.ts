@@ -90,7 +90,7 @@ describe('buildStreamRequestOptions', () => {
   })
 
   it('asks for thought summaries on every Gemini model in the catalog', () => {
-    for (const model of ['gemini-3.6-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash-lite']) {
+    for (const model of ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.1-pro-preview']) {
       const options = buildStreamRequestOptions({ provider: 'google', model }, 'run-key-7')
 
       expect(options.providerOptions?.google).toEqual({ thinkingConfig: { includeThoughts: true } })

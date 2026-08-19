@@ -59,6 +59,7 @@ describe('EditorCanvas spanning mockups', () => {
     const markup = renderToStaticMarkup(
       <EditorCanvas
         slides={spanningSlides}
+        uploads={[]}
         activeSlideId="slide-one"
         selectedElementIds={[]}
         exporting={false}
@@ -94,6 +95,7 @@ describe('EditorCanvas screen actions', () => {
     const markup = renderToStaticMarkup(
       <EditorCanvas
         slides={slides}
+        uploads={[]}
         activeSlideId="slide-one"
         selectedElementIds={[]}
         exporting={false}
@@ -128,6 +130,7 @@ describe('EditorCanvas screen actions', () => {
     const markup = renderToStaticMarkup(
       <EditorCanvas
         slides={slides.slice(0, 1)}
+        uploads={[]}
         activeSlideId="slide-one"
         selectedElementIds={[]}
         exporting={false}
@@ -157,6 +160,7 @@ describe('EditorCanvas screen actions', () => {
     const markup = renderToStaticMarkup(
       <EditorCanvas
         slides={[]}
+        uploads={[]}
         activeSlideId=""
         selectedElementIds={[]}
         exporting={false}

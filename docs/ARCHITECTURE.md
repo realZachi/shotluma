@@ -58,6 +58,8 @@ Export scales that DOM representation to the selected output size. This has one 
 
 A device mockup with `spansScreens` enabled is additionally rendered inside the adjacent artboards as a non-interactive ghost (`SpanGhostItem`), shifted by exactly one artboard width (±100%, `src/editor/screen-span.ts`). App Store screenshots sit flush against each other, so the editor's visual gap between artboards must never offset ghosts. Because export rasterizes the same DOM, both halves stay aligned across exported screens without a separate export path. Drag and nudge bounds for spanning devices are widened by one screen in `src/editor/drag-bounds.ts`.
 
+A slide with `html` set is an AI-authored HTML screen: the artboard renders the sanitized markup through `src/components/HtmlSlideContent.tsx` instead of background and elements. HTML screens are authored at the native `1290 × 2796` px size and scaled onto the 330 px artboard by a constant `scale(330 / 1290)` transform, so their CSS pixel values are export pixels — unlike element `fontSize` values. `<shotluma-device>` placeholders inside the markup are hydrated with the real photo mockup renderer via portals, and `asset:<id>` references are substituted with upload data URLs at render time (`src/html-slide/assets.ts`). HTML screens have no manual editing surface (the editor rejects element, background, and template actions on them), do not participate in screen spanning, and export through the same `html-to-image` path as element slides.
+
 Typical internal font sizes are:
 
 - Hero headline: `32–46`
@@ -69,7 +71,16 @@ Values over roughly `52` are usually incorrect.
 
 ## Persistence
 
-`src/persistence.ts` stores project data and uploaded assets in IndexedDB. A small local-storage migration path exists for legacy projects.
+`src/persistence.ts` stores project documents in IndexedDB (database opening and store names live in `src/persistence-db.ts`). A small local-storage migration path exists for legacy projects.
+
+Image bytes are kept out of project documents and out of the JS heap:
+
+- `src/asset-store.ts` stores every image as a Blob in a content-addressed `assets` store (SHA-256 id), which Chrome keeps disk-backed. Identical images deduplicate across projects automatically.
+- Persisted documents reference images as `blob-asset:<id>`; the running app renders object URLs. `src/asset-sources.ts` owns the pure walk over the fields that can carry an image source (uploads, background images, image elements, device screenshots).
+- Loading a project resolves references to object URLs; documents saved before the asset store existed carry inline data URLs, which are converted to stored Blobs on load and persisted as references on the next save.
+- Starting the app reads project summaries with a cursor, so only the active project document is fully retained in memory.
+- Deleting a project sweeps stored Blobs that no surviving project references. The sweep deliberately keeps every asset seen in the current session: unsaved in-memory state and undo history can reference assets no persisted document mentions, so those Blobs stay until a later session's sweep. Object URLs are never revoked for the same reason — they pin disk-backed Blobs, not heap memory.
+- Sweeping scans and deletes in separate transactions. Concurrent editing from a second tab is not a supported model (the database open already rejects when another tab blocks an upgrade); a save racing a delete across tabs could at worst strand one `blob-asset:` reference, which renders as a missing image.
 
 Persistence is browser-local:
 
@@ -121,6 +132,12 @@ The AI feature is split into explicit layers:
 | `src/ai/codex-bridge-client.ts` | Paired loopback HTTP transport and App Server RPC correlation |
 | `src/ai/codex-connection.ts` | Browser pairing state and generated Codex setup prompt |
 | `src/ai/prompt.ts` | Design rules and coordinate semantics |
+| `src/ai/html-prompt.ts` | System prompt for the experimental HTML screen mode |
+| `src/ai/html-tools.ts` | HTML screen creation, full rewrite, and unique-substring patch tools |
+| `src/html-slide/sanitize.ts` | Security boundary for model-authored screen markup |
+| `src/html-slide/assets.ts` | `asset:` reference resolution for HTML screens |
+| `src/html-slide/scope-styles.ts` | Per-screen `@scope` isolation of model-authored styles |
+| `src/html-slide/device-attributes.ts` | `<shotluma-device>` placeholder parsing |
 | `src/ai/prompt-caching.ts` | OpenAI, Anthropic, and Qwen prompt-cache routing and breakpoints |
 | `src/ai/chat-tool-images.ts` | Image relay for providers whose chat tool results support text only |
 | `src/ai/describe-images.ts` | Replace image parts with text descriptions for models without vision |
@@ -148,6 +165,8 @@ The AI feature is split into explicit layers:
 | `scripts/codex-bridge-asset-plugin.ts` | Emits the standalone connector as a public build asset |
 
 The model does not receive unrestricted application access. It can only use the tools supplied by `createEditorTools`, and the controller applies per-element field whitelists.
+
+The generate dialog offers an experimental **HTML screen mode** as a parallel path to the element tools. In this mode the model authors each screen as one complete HTML document through a minimal toolset (`add_html_screen`, `set_screen_html`, `patch_screen_html`, plus the shared preview loop) instead of composing elements. Editing keeps both worlds separate: element slides always run the element toolset, HTML slides always run the HTML toolset. Everything the model writes passes `sanitizeScreenHtml` before storage and again at render; the sanitizer rejects scripts, event handlers, and every external URL, which is what makes inline rendering safe next to `localStorage` API keys. Overlay assets and screen spanning are not available in HTML mode.
 
 Mutating tools return measured element bounds and layout warnings. The model can also inspect a full slide and request a rendered preview. These results close the gap between requested coordinates and the browser's actual layout.
 

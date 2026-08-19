@@ -42,6 +42,7 @@ import { AiRunBand } from './AiRunBand'
 import { CodexConnectionDialog } from './CodexConnectionDialog'
 import { CopyCodingPromptButton } from './CopyCodingPrompt'
 import { AiGenerative, Plus, Upload, X } from './icons'
+import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Switch } from './ui/switch'
@@ -86,8 +87,9 @@ export type AiGenerateModalProps = {
   open: boolean
   onClose: () => void
   controller: AiEditorController
-  targetSlide?: { id: string; name: string }
-  onPrepareRun: (files: { name: string; dataUrl: string }[]) => { assetId: string; name: string; dataUrl: string }[]
+  /** `html` set means the target is an AI-authored HTML screen; edits then run the HTML toolset. */
+  targetSlide?: { id: string; name: string; html?: string }
+  onPrepareRun: (files: { name: string; dataUrl: string }[]) => Promise<{ assetId: string; name: string; dataUrl: string }[]>
   onFinished: (slidesCreated: number) => void
   onActivity?: (activity: AiToolActivity | null) => void
 }
@@ -185,8 +187,7 @@ type IdleContentProps = {
   description: string
   logo: ImageDraft | null
   screenshots: ImageDraft[]
-  enableOverlayAssets: boolean
-  overlayAssetsAvailable: boolean
+  enableHtmlScreens: boolean
   logoInputRef: RefObject<HTMLInputElement | null>
   fileInputRef: RefObject<HTMLInputElement | null>
   onAppNameChange: (appName: string) => void
@@ -195,7 +196,7 @@ type IdleContentProps = {
   onRemoveLogo: () => void
   onScreenshotFiles: (files: File[]) => void
   onRemoveScreenshot: (id: string) => void
-  onEnableOverlayAssetsChange: (enabled: boolean) => void
+  onEnableHtmlScreensChange: (enabled: boolean) => void
 }
 
 const IdleContent = ({
@@ -204,8 +205,7 @@ const IdleContent = ({
   description,
   logo,
   screenshots,
-  enableOverlayAssets,
-  overlayAssetsAvailable,
+  enableHtmlScreens,
   logoInputRef,
   fileInputRef,
   onAppNameChange,
@@ -214,7 +214,7 @@ const IdleContent = ({
   onRemoveLogo,
   onScreenshotFiles,
   onRemoveScreenshot,
-  onEnableOverlayAssetsChange,
+  onEnableHtmlScreensChange,
 }: IdleContentProps) => (
   <>
     {!isEditMode && (
@@ -320,25 +320,24 @@ const IdleContent = ({
         </small>
       )}
     </div>
-    <div className="ai-modal-overlay-toggle">
-      <Switch
-        id="ai-modal-overlay-assets"
-        checked={enableOverlayAssets}
-        disabled={!overlayAssetsAvailable}
-        onCheckedChange={onEnableOverlayAssetsChange}
-      />
-      <label htmlFor="ai-modal-overlay-assets" className="ai-modal-overlay-toggle__copy">
-        <b>Decorative graphics</b>
-        <span>
-          Adds 1–2 cutout elements on top of your screens — badges, stickers, snippets of your UI. Never device frames or mockups.
-        </span>
-        <small>
-          {overlayAssetsAvailable
-            ? 'Uses your OpenAI key'
-            : 'Requires an OpenAI API key. Enter it via API keys.'}
-        </small>
-      </label>
-    </div>
+    {!isEditMode && (
+      <div className="ai-modal-overlay-toggle">
+        <Switch
+          id="ai-modal-html-screens"
+          checked={enableHtmlScreens}
+          onCheckedChange={onEnableHtmlScreensChange}
+        />
+        <label htmlFor="ai-modal-html-screens" className="ai-modal-overlay-toggle__copy">
+          <b>HTML screens <Badge variant="secondary">Experimental</Badge></b>
+          <span>
+            The AI designs each screen as free-form HTML and CSS instead of canvas elements — often bolder layouts and typography.
+          </span>
+          <small>
+            HTML screens can only be edited with AI, not by hand.
+          </small>
+        </label>
+      </div>
+    )}
   </>
 )
 
@@ -404,7 +403,7 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [doneInfo, setDoneInfo] = useState<{ summary: string; slidesCreated: number } | null>(null)
   const [selection, setSelection] = useState<AiModelSelection>(INITIAL_AI_SELECTION)
-  const [enableOverlayAssets, setEnableOverlayAssets] = useState(false)
+  const [enableHtmlScreens, setEnableHtmlScreens] = useState(false)
   const [keysRevision, setKeysRevision] = useState(0)
   const [keysDialogOpen, setKeysDialogOpen] = useState(false)
   const [keysDialogInstance, setKeysDialogInstance] = useState(0)
@@ -422,6 +421,7 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const cancelledRef = useRef(false)
+  const runActiveRef = useRef(false)
 
   const requestClose = () => {
     if (phase === 'running' || keysDialogOpen || codexDialogOpen) return
@@ -445,6 +445,8 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
   if (!open) return null
 
   const isEditMode = Boolean(targetSlide)
+  // Edits on an AI-authored HTML screen must run the HTML toolset; the generate toggle covers new sets.
+  const htmlMode = isEditMode ? targetSlide?.html !== undefined : enableHtmlScreens
   const canGenerate = Boolean(description.trim())
     && (isEditMode || (Boolean(appName.trim()) && logo !== null && screenshots.length > 0))
     && availability[selection.provider]
@@ -516,17 +518,19 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
   }
 
   const handleGenerate = async () => {
-    if (!canGenerate || phase === 'running') return
+    // The run is marked active before the asynchronous preparation await, so a
+    // second click cannot start a parallel run and the close/cancel guards
+    // already apply while attachments are still being stored.
+    if (!canGenerate || phase === 'running' || runActiveRef.current) return
+    runActiveRef.current = true
     const filesToPrepare = [
       ...screenshots.map((shot) => ({ name: shot.name, dataUrl: shot.dataUrl })),
       ...(!isEditMode && logo ? [{ name: logo.name, dataUrl: logo.dataUrl }] : []),
     ]
-    const prepared = onPrepareRun(filesToPrepare)
-    const preparedScreenshots = prepared.slice(0, screenshots.length)
-    const preparedLogo = !isEditMode && logo ? prepared[screenshots.length] : undefined
     const abortController = new AbortController()
     abortControllerRef.current = abortController
     cancelledRef.current = false
+    const wasCancelled = () => cancelledRef.current
     setAssistantText('')
     setNarration(createNarrationState())
     setPlan([])
@@ -535,21 +539,34 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
     setErrorMessage(null)
     setDoneInfo(null)
     setPhase('running')
-    await runAiGeneration({
-      selection,
-      description,
-      screenshots: preparedScreenshots,
-      ...(!isEditMode && appName.trim() ? { appName: appName.trim() } : {}),
-      ...(preparedLogo ? { logo: preparedLogo } : {}),
-      controller,
-      ...(targetSlide ? { targetSlideId: targetSlide.id } : {}),
-      ...(enableOverlayAssets && availability.openai
-        ? { enableOverlayAssets: true }
-        : {}),
-      signal: abortController.signal,
-      onEvent: handleEvent,
-      ...(onActivity ? { onActivity } : {}),
-    })
+    try {
+      const prepared = await onPrepareRun(filesToPrepare)
+      if (wasCancelled()) return
+      const preparedScreenshots = prepared.slice(0, screenshots.length)
+      const preparedLogo = !isEditMode && logo ? prepared[screenshots.length] : undefined
+      await runAiGeneration({
+        selection,
+        description,
+        screenshots: preparedScreenshots,
+        ...(!isEditMode && appName.trim() ? { appName: appName.trim() } : {}),
+        ...(preparedLogo ? { logo: preparedLogo } : {}),
+        controller,
+        ...(targetSlide ? { targetSlideId: targetSlide.id } : {}),
+        ...(htmlMode ? { htmlMode: true } : {}),
+        signal: abortController.signal,
+        onEvent: handleEvent,
+        ...(onActivity ? { onActivity } : {}),
+      })
+    } catch (error) {
+      if (!wasCancelled()) {
+        setNarration(flushNarration)
+        setErrorMessage(error instanceof Error ? error.message : String(error))
+        setPhase('error')
+        onActivity?.(null)
+      }
+    } finally {
+      runActiveRef.current = false
+    }
   }
 
   const handleCancel = () => {
@@ -608,8 +625,7 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
               description={description}
               logo={logo}
               screenshots={screenshots}
-              enableOverlayAssets={enableOverlayAssets && availability.openai}
-              overlayAssetsAvailable={availability.openai}
+              enableHtmlScreens={enableHtmlScreens}
               logoInputRef={logoInputRef}
               fileInputRef={fileInputRef}
               onAppNameChange={setAppName}
@@ -622,7 +638,7 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
                 void handleScreenshotFiles(files)
               }}
               onRemoveScreenshot={removeScreenshot}
-              onEnableOverlayAssetsChange={setEnableOverlayAssets}
+              onEnableHtmlScreensChange={setEnableHtmlScreens}
             />
           </div>
 

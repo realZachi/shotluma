@@ -119,11 +119,22 @@ export type Slide = {
   name: string
   background: Background
   elements: CanvasElement[]
+  /**
+   * Sanitized AI-authored screen markup. When set, the artboard renders this
+   * HTML document (authored at 1290 × 2796 px) instead of background and
+   * elements, and the screen is editable only through AI runs.
+   */
+  html?: string
 }
 
 export type UploadAsset = {
   id: string
   name: string
+  /**
+   * Renderable source. At runtime this is an object URL for a Blob in the
+   * IndexedDB asset store (data URL only when Blob storage is unavailable);
+   * persisted documents carry `blob-asset:` references instead.
+   */
   src: string
 }
 

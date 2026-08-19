@@ -1,6 +1,7 @@
 import { asSchema, type ToolExecutionOptions, type ToolSet } from 'ai'
 import { CodexBridgeClient, type CodexRpcMessage } from './codex-bridge-client'
 import { scopeAiControllerToSlide, type AiEditorController } from './controller'
+import { buildHtmlInstructions } from './html-prompt'
 import { buildInstructions, buildUserMessage } from './prompt'
 import { getAiModel, type AiModelSelection } from './provider-catalog'
 import { parsePlanInput } from './run-plan'
@@ -170,6 +171,22 @@ const serializeToolOutput = (output: unknown): {
   }
 }
 
+// Expected tool failures return `success: true` with an `{ ok: false }` payload,
+// so both layers must be checked to tell a real screen from a refused one.
+const isFailedDynamicToolResult = (
+  result: ReturnType<typeof serializeToolOutput>,
+): boolean => {
+  if (!result.success) return true
+  const first = result.contentItems[0]
+  if (first?.type !== 'inputText') return false
+  try {
+    const parsed: unknown = JSON.parse(first.text)
+    return isObject(parsed) && parsed['ok'] === false
+  } catch {
+    return false
+  }
+}
+
 const serializeToolFailure = (error: unknown) => ({
   success: false,
   contentItems: [{
@@ -230,6 +247,7 @@ const buildCodexInput = (options: {
   appName?: string
   logo?: PreparedAsset
   targetSlideId?: string
+  htmlMode?: boolean
 }): CodexInput[] => {
   const input: CodexInput[] = [{
     type: 'text',
@@ -240,6 +258,7 @@ const buildCodexInput = (options: {
         ...(options.targetSlideId ? { targetSlideId: options.targetSlideId } : {}),
         ...(options.appName?.trim() ? { appName: options.appName.trim() } : {}),
         ...(options.logo ? { logoAssetId: options.logo.assetId } : {}),
+        ...(options.htmlMode ? { htmlMode: true } : {}),
       },
     ),
   }]
@@ -253,7 +272,9 @@ const buildCodexInput = (options: {
   if (options.logo) {
     input.push({
       type: 'text',
-      text: `App logo asset "${options.logo.assetId}" (${options.logo.name}) — place with add_image, never as a device screenshot:`,
+      text: options.htmlMode
+        ? `App logo asset "${options.logo.assetId}" (${options.logo.name}) — place with an <img src="asset:${options.logo.assetId}"> tag, never as a device screenshot:`
+        : `App logo asset "${options.logo.assetId}" (${options.logo.name}) — place with add_image, never as a device screenshot:`,
     })
     input.push({ type: 'image', url: options.logo.dataUrl, detail: 'high' })
   }
@@ -370,11 +391,22 @@ type CodexGenerationOptions = {
   controller: AiEditorController
   targetSlideId?: string
   enableOverlayAssets?: boolean
+  htmlMode?: boolean
   signal?: AbortSignal
   onEvent: (event: AiRunEvent) => void
   onActivity?: (activity: AiToolActivity) => void
   client?: CodexRpcClient
 }
+
+const buildCodexBaseInstructions = (options: CodexGenerationOptions): string =>
+  options.htmlMode
+    ? buildHtmlInstructions({
+        ...(options.targetSlideId ? { targetSlideId: options.targetSlideId } : {}),
+      })
+    : buildInstructions({
+        ...(options.targetSlideId ? { targetSlideId: options.targetSlideId } : {}),
+        ...(options.enableOverlayAssets ? { enableOverlayAssets: true } : {}),
+      })
 
 const createCodexRunTools = (options: CodexGenerationOptions) => {
   const controller = options.targetSlideId
@@ -382,8 +414,9 @@ const createCodexRunTools = (options: CodexGenerationOptions) => {
     : options.controller
   return createEditorTools(controller, {
     mode: options.targetSlideId ? 'edit' : 'generate',
+    ...(options.htmlMode ? { htmlScreens: true } : {}),
     ...(options.onActivity ? { onActivity: options.onActivity } : {}),
-    ...(options.enableOverlayAssets ? { enableOverlayAssets: true } : {}),
+    ...(options.enableOverlayAssets && !options.htmlMode ? { enableOverlayAssets: true } : {}),
     ...(options.signal ? { abortSignal: options.signal } : {}),
   })
 }
@@ -421,6 +454,10 @@ export const runCodexAppServerGeneration = async (
         slidesCreated += 1
       }
     }
+    if (request.toolName === 'add_html_screen') {
+      options.onEvent({ type: 'slide-started', index: slidesCreated })
+      slidesCreated += 1
+    }
     options.onEvent({
       type: 'tool',
       name: request.toolName,
@@ -431,6 +468,11 @@ export const runCodexAppServerGeneration = async (
       tools,
       ...(options.signal ? { signal: options.signal } : {}),
     })
+    // add_html_screen can fail without creating anything (oversized markup);
+    // take the optimistic slide count back so the final report stays honest.
+    if (request.toolName === 'add_html_screen' && isFailedDynamicToolResult(result)) {
+      slidesCreated = Math.max(0, slidesCreated - 1)
+    }
     await client.respond(request.requestId, result)
   }
 
@@ -498,10 +540,7 @@ export const runCodexAppServerGeneration = async (
     threadId = readThreadId(await client.request('thread/start', {
       model: model.providerModelId ?? model.id,
       ephemeral: true,
-      baseInstructions: buildInstructions({
-        ...(options.targetSlideId ? { targetSlideId: options.targetSlideId } : {}),
-        ...(options.enableOverlayAssets ? { enableOverlayAssets: true } : {}),
-      }),
+      baseInstructions: buildCodexBaseInstructions(options),
       developerInstructions: 'You are embedded in Shotluma. Use only the provided Shotluma dynamic tools. Never use shell, filesystem, network, MCP, skills, plugins, or subagents.',
       dynamicTools: await createCodexDynamicToolSpecs(tools),
     }, options.signal))
@@ -513,6 +552,7 @@ export const runCodexAppServerGeneration = async (
         ...(options.appName !== undefined ? { appName: options.appName } : {}),
         ...(options.logo ? { logo: options.logo } : {}),
         ...(options.targetSlideId ? { targetSlideId: options.targetSlideId } : {}),
+        ...(options.htmlMode ? { htmlMode: true } : {}),
       }),
       model: model.providerModelId ?? model.id,
       ...(options.selection.reasoningEffort
