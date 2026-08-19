@@ -1,7 +1,8 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { importBlobAsset } from '../asset-store'
 import { makeTemplate } from '../data'
 import { getDevicePlacement } from '../mockups/catalog'
-import { fileToDataUrl, uid } from '../utils'
+import { uid } from '../utils'
 import { freshElementIds } from './element-utils'
 import { panelRevealForAddedSlide, removeSlide } from './slide-operations'
 import type {
@@ -271,7 +272,7 @@ export function useEditorActions({
     const assets = await Promise.all(accepted.map(async (file) => ({
       id: uid('upload'),
       name: file.name,
-      src: await fileToDataUrl(file),
+      src: await importBlobAsset(file),
     })))
     setUploads((current) => [...assets, ...current])
     if (assets.length > 0) {
@@ -280,14 +281,14 @@ export function useEditorActions({
   }, [setToast, setUploads])
 
   const uploadToSelectedDevice = useCallback(async (file: File) => {
-    const asset = { id: uid('upload'), name: file.name, src: await fileToDataUrl(file) }
+    const asset = { id: uid('upload'), name: file.name, src: await importBlobAsset(file) }
     setUploads((current) => [asset, ...current])
     setDeviceImage(asset)
   }, [setDeviceImage, setUploads])
 
   const uploadBackgroundImage = useCallback(async (file: File) => {
     if (rejectHtmlSlideEdit()) return
-    const asset = { id: uid('upload'), name: file.name, src: await fileToDataUrl(file) }
+    const asset = { id: uid('upload'), name: file.name, src: await importBlobAsset(file) }
     setUploads((current) => [asset, ...current])
     commit((current) => current.map((slide) => slide.id === activeSlideId
       ? {

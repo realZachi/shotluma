@@ -16,7 +16,7 @@ export const downloadBlob = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(url)
 }
 
-export const fileToDataUrl = (file: File) =>
+export const fileToDataUrl = (file: Blob) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {

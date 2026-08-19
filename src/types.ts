@@ -130,6 +130,11 @@ export type Slide = {
 export type UploadAsset = {
   id: string
   name: string
+  /**
+   * Renderable source. At runtime this is an object URL for a Blob in the
+   * IndexedDB asset store (data URL only when Blob storage is unavailable);
+   * persisted documents carry `blob-asset:` references instead.
+   */
   src: string
 }
 
