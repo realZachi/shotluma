@@ -1,5 +1,6 @@
 import { generateImage, tool } from 'ai'
 import { z } from 'zod'
+import { fileToDataUrl } from '../utils'
 import { ASSET_CHROMA_KEY_HEX } from './chroma-key'
 import {
   OVERLAY_ASSET_BUDGET,
@@ -25,6 +26,14 @@ const dataUrlToBase64 = (dataUrl: string): string => {
   const comma = dataUrl.indexOf(',')
   if (comma === -1) return dataUrl
   return dataUrl.slice(comma + 1)
+}
+
+// Upload sources are object URLs backed by stored Blobs (data URLs only as a
+// storage fallback), so provider payloads fetch the bytes back before encoding.
+const sourceToBase64 = async (src: string): Promise<string> => {
+  if (src.startsWith('data:')) return dataUrlToBase64(src)
+  const blob = await (await fetch(src)).blob()
+  return dataUrlToBase64(await fileToDataUrl(blob))
 }
 
 const sanitizeAssetName = (name: string): string => {
@@ -69,15 +78,19 @@ const toAssetModelOutput = (output: OverlayAssetToolResult) => {
   }
 }
 
-const resolveReferenceImages = (
+const resolveReferenceImages = async (
   controller: ToolContext['controller'],
   referenceAssetIds: string[] | undefined,
-): { ok: true; images: string[] } | { ok: false; error: string } => {
+): Promise<{ ok: true; images: string[] } | { ok: false; error: string }> => {
   const images: string[] = []
   for (const assetId of referenceAssetIds ?? []) {
     const src = controller.getAssetSrc(assetId)
     if (!src) return notFound(assetNotFoundMessage(assetId))
-    images.push(dataUrlToBase64(src))
+    try {
+      images.push(await sourceToBase64(src))
+    } catch {
+      return notFound(assetNotFoundMessage(assetId))
+    }
   }
   return { ok: true, images }
 }
@@ -188,7 +201,7 @@ PROMPTING: describe ONLY the subject — one object, its material, style, colors
         }
       }
 
-      const references = resolveReferenceImages(controller, referenceAssetIds)
+      const references = await resolveReferenceImages(controller, referenceAssetIds)
       if (!references.ok) return references
 
       emit({ tool: 'create_overlay_asset' })

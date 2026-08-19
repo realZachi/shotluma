@@ -1,10 +1,12 @@
+import {
+  collectPersistedAssetIds,
+  dehydrateProjectAssets,
+  hydrateProjectAssets,
+  sweepUnusedAssets,
+} from './asset-store'
+import { openDatabase, PROJECT_STORE, SETTINGS_STORE } from './persistence-db'
 import type { Slide, UploadAsset } from './types'
 
-// Keep the established IndexedDB name so rebranding never strands local projects.
-const DATABASE_NAME = 'frameflow'
-const DATABASE_VERSION = 2
-const PROJECT_STORE = 'projects'
-const SETTINGS_STORE = 'settings'
 const ACTIVE_PROJECT_KEY = 'activeProjectId'
 const LEGACY_STORAGE_KEY = 'frameflow-project-v5'
 
@@ -20,48 +22,6 @@ export type PersistedProject = {
 export type ProjectSummary = Pick<PersistedProject, 'id' | 'projectName' | 'createdAt' | 'savedAt'>
 
 type SettingRecord = { key: string; value: string }
-
-let databasePromise: Promise<IDBDatabase> | null = null
-
-const openDatabase = (): Promise<IDBDatabase> => {
-  if (databasePromise) return databasePromise
-
-  databasePromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION)
-    let settled = false
-
-    const fail = (error: Error) => {
-      settled = true
-      databasePromise = null
-      reject(error)
-    }
-
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(PROJECT_STORE)) {
-        request.result.createObjectStore(PROJECT_STORE, { keyPath: 'id' })
-      }
-      if (!request.result.objectStoreNames.contains(SETTINGS_STORE)) {
-        request.result.createObjectStore(SETTINGS_STORE, { keyPath: 'key' })
-      }
-    }
-    request.onsuccess = () => {
-      if (settled) {
-        request.result.close()
-        return
-      }
-      settled = true
-      request.result.onversionchange = () => {
-        request.result.close()
-        databasePromise = null
-      }
-      resolve(request.result)
-    }
-    request.onerror = () => fail(request.error ?? new Error('Local project storage could not be opened.'))
-    request.onblocked = () => fail(new Error('Local project storage is blocked by another tab.'))
-  })
-
-  return databasePromise
-}
 
 export const normalizePersistedProject = (value: unknown): PersistedProject | null => {
   if (!value || typeof value !== 'object') return null
@@ -91,48 +51,74 @@ const summarizeProject = (project: PersistedProject): ProjectSummary => ({
   savedAt: project.savedAt,
 })
 
-const sortProjects = (projects: PersistedProject[]) => [...projects].sort((a, b) => b.savedAt - a.savedAt)
+const sortSummaries = (projects: ProjectSummary[]) => [...projects].sort((a, b) => b.savedAt - a.savedAt)
 
-export const loadProjectWorkspace = async (): Promise<{ activeProject: PersistedProject | null; projects: ProjectSummary[] }> => {
-  const database = await openDatabase()
-
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction([PROJECT_STORE, SETTINGS_STORE], 'readonly')
-    const projectsRequest = transaction.objectStore(PROJECT_STORE).getAll()
-    const activeRequest = transaction.objectStore(SETTINGS_STORE).get(ACTIVE_PROJECT_KEY)
-
-    transaction.oncomplete = () => {
-      const projects = sortProjects(
-        (projectsRequest.result as unknown[])
-          .map(normalizePersistedProject)
-          .filter((project): project is PersistedProject => project !== null),
-      )
-      const configuredId = (activeRequest.result as SettingRecord | undefined)?.value
-      const activeProject = projects.find((project) => project.id === configuredId) ?? projects[0] ?? null
-      resolve({ activeProject, projects: projects.map(summarizeProject) })
-    }
-    transaction.onerror = () => reject(transaction.error ?? new Error('Local projects could not be loaded.'))
-    transaction.onabort = () => reject(transaction.error ?? new Error('Loading local projects was cancelled.'))
-  })
-}
-
-export const loadProject = async (projectId: string): Promise<PersistedProject | null> => {
-  const database = await openDatabase()
-
-  return new Promise((resolve, reject) => {
+const readProjectRecord = (database: IDBDatabase, projectId: string): Promise<PersistedProject | null> =>
+  new Promise((resolve, reject) => {
     const transaction = database.transaction(PROJECT_STORE, 'readonly')
     const request = transaction.objectStore(PROJECT_STORE).get(projectId)
     request.onsuccess = () => resolve(normalizePersistedProject(request.result))
     request.onerror = () => reject(request.error ?? new Error('The local project could not be loaded.'))
   })
+
+type WorkspaceRecords = { summaries: ProjectSummary[]; activeProject: PersistedProject | null }
+
+// A cursor walk keeps only one project document deserialized at a time, so
+// startup memory peaks at the largest single project instead of the sum of
+// every project — the full document is retained only for the active one.
+const readWorkspaceRecords = (database: IDBDatabase): Promise<WorkspaceRecords> =>
+  new Promise((resolve, reject) => {
+    const transaction = database.transaction([PROJECT_STORE, SETTINGS_STORE], 'readonly')
+    const summaries: ProjectSummary[] = []
+    let activeProject: PersistedProject | null = null
+
+    const activeRequest = transaction.objectStore(SETTINGS_STORE).get(ACTIVE_PROJECT_KEY)
+    activeRequest.onsuccess = () => {
+      const configuredId = (activeRequest.result as SettingRecord | undefined)?.value
+      const cursorRequest = transaction.objectStore(PROJECT_STORE).openCursor()
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result
+        if (!cursor) return
+        const project = normalizePersistedProject(cursor.value)
+        if (project) {
+          summaries.push(summarizeProject(project))
+          if (project.id === configuredId) activeProject = project
+        }
+        cursor.continue()
+      }
+    }
+
+    transaction.oncomplete = () => resolve({ summaries: sortSummaries(summaries), activeProject })
+    transaction.onerror = () => reject(transaction.error ?? new Error('Local projects could not be loaded.'))
+    transaction.onabort = () => reject(transaction.error ?? new Error('Loading local projects was cancelled.'))
+  })
+
+export const loadProjectWorkspace = async (): Promise<{ activeProject: PersistedProject | null; projects: ProjectSummary[] }> => {
+  const database = await openDatabase()
+  const { summaries, activeProject } = await readWorkspaceRecords(database)
+  const fallbackId = summaries[0]?.id
+  const record = activeProject ?? (fallbackId ? await readProjectRecord(database, fallbackId) : null)
+  return {
+    activeProject: record ? await hydrateProjectAssets(record) : null,
+    projects: summaries,
+  }
+}
+
+export const loadProject = async (projectId: string): Promise<PersistedProject | null> => {
+  const database = await openDatabase()
+  const record = await readProjectRecord(database, projectId)
+  return record ? hydrateProjectAssets(record) : null
 }
 
 export const saveProject = async (project: PersistedProject): Promise<void> => {
+  // Image blobs are written before the document that references them, so a
+  // failed save can leave an unreferenced blob but never a dangling reference.
+  const record = await dehydrateProjectAssets(project)
   const database = await openDatabase()
 
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(PROJECT_STORE, 'readwrite')
-    transaction.objectStore(PROJECT_STORE).put(project)
+    transaction.objectStore(PROJECT_STORE).put(record)
     transaction.oncomplete = () => resolve()
     transaction.onerror = () => reject(transaction.error ?? new Error('The local project could not be saved.'))
     transaction.onabort = () => reject(transaction.error ?? new Error('Saving the local project was cancelled.'))
@@ -151,16 +137,44 @@ export const setActiveProjectId = async (projectId: string): Promise<void> => {
   })
 }
 
+const collectRemainingAssetIds = (database: IDBDatabase): Promise<Set<string>> =>
+  new Promise((resolve, reject) => {
+    const transaction = database.transaction(PROJECT_STORE, 'readonly')
+    const keep = new Set<string>()
+    const cursorRequest = transaction.objectStore(PROJECT_STORE).openCursor()
+    cursorRequest.onsuccess = () => {
+      const cursor = cursorRequest.result
+      if (!cursor) return
+      const project = normalizePersistedProject(cursor.value)
+      if (project) {
+        for (const id of collectPersistedAssetIds(project)) keep.add(id)
+      }
+      cursor.continue()
+    }
+    transaction.oncomplete = () => resolve(keep)
+    transaction.onerror = () => reject(transaction.error ?? new Error('Local projects could not be scanned.'))
+    transaction.onabort = () => reject(transaction.error ?? new Error('Scanning local projects was cancelled.'))
+  })
+
 export const deleteProject = async (projectId: string): Promise<void> => {
   const database = await openDatabase()
 
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const transaction = database.transaction(PROJECT_STORE, 'readwrite')
     transaction.objectStore(PROJECT_STORE).delete(projectId)
     transaction.oncomplete = () => resolve()
     transaction.onerror = () => reject(transaction.error ?? new Error('The local project could not be deleted.'))
     transaction.onabort = () => reject(transaction.error ?? new Error('Deleting the project was cancelled.'))
   })
+
+  // Best effort: reclaim image blobs no surviving project references. The
+  // project deletion above already succeeded, so a failed sweep only leaves
+  // unused blobs on disk for the next sweep to pick up.
+  try {
+    await sweepUnusedAssets(await collectRemainingAssetIds(database))
+  } catch {
+    // Ignored — see above.
+  }
 }
 
 export const loadLegacyProject = (): { slides: Slide[]; uploads: UploadAsset[] } | null => {

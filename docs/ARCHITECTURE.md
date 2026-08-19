@@ -70,7 +70,15 @@ Values over roughly `52` are usually incorrect.
 
 ## Persistence
 
-`src/persistence.ts` stores project data and uploaded assets in IndexedDB. A small local-storage migration path exists for legacy projects.
+`src/persistence.ts` stores project documents in IndexedDB (database opening and store names live in `src/persistence-db.ts`). A small local-storage migration path exists for legacy projects.
+
+Image bytes are kept out of project documents and out of the JS heap:
+
+- `src/asset-store.ts` stores every image as a Blob in a content-addressed `assets` store (SHA-256 id), which Chrome keeps disk-backed. Identical images deduplicate across projects automatically.
+- Persisted documents reference images as `blob-asset:<id>`; the running app renders object URLs. `src/asset-sources.ts` owns the pure walk over the fields that can carry an image source (uploads, background images, image elements, device screenshots).
+- Loading a project resolves references to object URLs; documents saved before the asset store existed carry inline data URLs, which are converted to stored Blobs on load and persisted as references on the next save.
+- Starting the app reads project summaries with a cursor, so only the active project document is fully retained in memory.
+- Deleting a project sweeps stored Blobs that no surviving project references.
 
 Persistence is browser-local:
 

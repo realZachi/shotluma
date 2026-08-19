@@ -60,7 +60,7 @@ export type AiGenerateModalProps = {
   controller: AiEditorController
   /** `html` set means the target is an AI-authored HTML screen; edits then run the HTML toolset. */
   targetSlide?: { id: string; name: string; html?: string }
-  onPrepareRun: (files: { name: string; dataUrl: string }[]) => { assetId: string; name: string; dataUrl: string }[]
+  onPrepareRun: (files: { name: string; dataUrl: string }[]) => Promise<{ assetId: string; name: string; dataUrl: string }[]>
   onFinished: (slidesCreated: number) => void
   onActivity?: (activity: AiToolActivity | null) => void
 }
@@ -496,7 +496,7 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
       ...screenshots.map((shot) => ({ name: shot.name, dataUrl: shot.dataUrl })),
       ...(!isEditMode && logo ? [{ name: logo.name, dataUrl: logo.dataUrl }] : []),
     ]
-    const prepared = onPrepareRun(filesToPrepare)
+    const prepared = await onPrepareRun(filesToPrepare)
     const preparedScreenshots = prepared.slice(0, screenshots.length)
     const preparedLogo = !isEditMode && logo ? prepared[screenshots.length] : undefined
     const abortController = new AbortController()
