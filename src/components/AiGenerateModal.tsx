@@ -35,6 +35,7 @@ import { AiRunBand } from './AiRunBand'
 import { CodexConnectionDialog } from './CodexConnectionDialog'
 import { CopyCodingPromptButton } from './CopyCodingPrompt'
 import { AiGenerative, Plus, Upload, X } from './icons'
+import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Switch } from './ui/switch'
@@ -157,8 +158,6 @@ type IdleContentProps = {
   description: string
   logo: ImageDraft | null
   screenshots: ImageDraft[]
-  enableOverlayAssets: boolean
-  overlayAssetsAvailable: boolean
   enableHtmlScreens: boolean
   logoInputRef: RefObject<HTMLInputElement | null>
   fileInputRef: RefObject<HTMLInputElement | null>
@@ -168,7 +167,6 @@ type IdleContentProps = {
   onRemoveLogo: () => void
   onScreenshotFiles: (files: File[]) => void
   onRemoveScreenshot: (id: string) => void
-  onEnableOverlayAssetsChange: (enabled: boolean) => void
   onEnableHtmlScreensChange: (enabled: boolean) => void
 }
 
@@ -178,8 +176,6 @@ const IdleContent = ({
   description,
   logo,
   screenshots,
-  enableOverlayAssets,
-  overlayAssetsAvailable,
   enableHtmlScreens,
   logoInputRef,
   fileInputRef,
@@ -189,7 +185,6 @@ const IdleContent = ({
   onRemoveLogo,
   onScreenshotFiles,
   onRemoveScreenshot,
-  onEnableOverlayAssetsChange,
   onEnableHtmlScreensChange,
 }: IdleContentProps) => (
   <>
@@ -296,27 +291,6 @@ const IdleContent = ({
         </small>
       )}
     </div>
-    <div className="ai-modal-overlay-toggle">
-      <Switch
-        id="ai-modal-overlay-assets"
-        checked={enableOverlayAssets && !enableHtmlScreens}
-        disabled={!overlayAssetsAvailable || enableHtmlScreens}
-        onCheckedChange={onEnableOverlayAssetsChange}
-      />
-      <label htmlFor="ai-modal-overlay-assets" className="ai-modal-overlay-toggle__copy">
-        <b>Decorative graphics</b>
-        <span>
-          Adds 1–2 cutout elements on top of your screens — badges, stickers, snippets of your UI. Never device frames or mockups.
-        </span>
-        <small>
-          {enableHtmlScreens
-            ? 'Not available in HTML screen mode yet.'
-            : overlayAssetsAvailable
-              ? 'Uses your OpenAI key'
-              : 'Requires an OpenAI API key. Enter it via API keys.'}
-        </small>
-      </label>
-    </div>
     {!isEditMode && (
       <div className="ai-modal-overlay-toggle">
         <Switch
@@ -325,7 +299,7 @@ const IdleContent = ({
           onCheckedChange={onEnableHtmlScreensChange}
         />
         <label htmlFor="ai-modal-html-screens" className="ai-modal-overlay-toggle__copy">
-          <b>HTML screens (experimental)</b>
+          <b>HTML screens <Badge variant="secondary">Experimental</Badge></b>
           <span>
             The AI designs each screen as free-form HTML and CSS instead of canvas elements — often bolder layouts and typography.
           </span>
@@ -397,7 +371,6 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [doneInfo, setDoneInfo] = useState<{ summary: string; slidesCreated: number } | null>(null)
   const [selection, setSelection] = useState<AiModelSelection>(INITIAL_AI_SELECTION)
-  const [enableOverlayAssets, setEnableOverlayAssets] = useState(false)
   const [enableHtmlScreens, setEnableHtmlScreens] = useState(false)
   const [keysRevision, setKeysRevision] = useState(0)
   const [keysDialogOpen, setKeysDialogOpen] = useState(false)
@@ -546,9 +519,6 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
       controller,
       ...(targetSlide ? { targetSlideId: targetSlide.id } : {}),
       ...(htmlMode ? { htmlMode: true } : {}),
-      ...(enableOverlayAssets && availability.openai && !htmlMode
-        ? { enableOverlayAssets: true }
-        : {}),
       signal: abortController.signal,
       onEvent: handleEvent,
       ...(onActivity ? { onActivity } : {}),
@@ -611,8 +581,6 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
               description={description}
               logo={logo}
               screenshots={screenshots}
-              enableOverlayAssets={enableOverlayAssets && availability.openai}
-              overlayAssetsAvailable={availability.openai}
               enableHtmlScreens={enableHtmlScreens}
               logoInputRef={logoInputRef}
               fileInputRef={fileInputRef}
@@ -626,7 +594,6 @@ export const AiGenerateModal = ({ open, onClose, controller, targetSlide, onPrep
                 void handleScreenshotFiles(files)
               }}
               onRemoveScreenshot={removeScreenshot}
-              onEnableOverlayAssetsChange={setEnableOverlayAssets}
               onEnableHtmlScreensChange={setEnableHtmlScreens}
             />
           </div>

@@ -89,7 +89,7 @@ export default tseslint.config(
       '@typescript-eslint/switch-exhaustiveness-check': 'error',
       'react-refresh/only-export-components': ['error', {
         allowConstantExport: true,
-        allowExportNames: ['buttonVariants'],
+        allowExportNames: ['badgeVariants', 'buttonVariants'],
       }],
     },
   },
