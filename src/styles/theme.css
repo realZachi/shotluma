@@ -439,6 +439,16 @@ select:focus-visible {
   font-weight: 540;
   line-height: 1.4;
 }
+.share-link-dialog-fallback {
+  height: 28px;
+  padding: 0 10px;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 10px;
+}
 .share-link-dialog [data-slot='alert-dialog-footer'] {
   margin: 0;
   padding: 11px 14px 13px;

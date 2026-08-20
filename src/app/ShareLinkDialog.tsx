@@ -41,6 +41,7 @@ export function ShareLinkDialog({
   const [link, setLink] = useState<ShareLinkResult | null>(null)
   const [failed, setFailed] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -64,6 +65,7 @@ export function ShareLinkDialog({
       setLink(null)
       setFailed(false)
       setCopied(false)
+      setCopyFailed(false)
     }
     onOpenChange(nextOpen)
   }
@@ -73,8 +75,9 @@ export function ShareLinkDialog({
     try {
       await navigator.clipboard.writeText(link.url)
       setCopied(true)
+      setCopyFailed(false)
     } catch {
-      setFailed(true)
+      setCopyFailed(true)
     }
   }
 
@@ -106,6 +109,20 @@ export function ShareLinkDialog({
                       ? ' Some messengers truncate links this size.'
                       : ''}`}
               </p>
+              {copyFailed && (
+                <>
+                  <p className="share-link-dialog-error">
+                    Copying was blocked by the browser — select the link below instead.
+                  </p>
+                  <input
+                    className="share-link-dialog-fallback"
+                    value={link.url}
+                    readOnly
+                    aria-label="Share link"
+                    onFocus={(event) => event.currentTarget.select()}
+                  />
+                </>
+              )}
             </>
           )}
         </div>

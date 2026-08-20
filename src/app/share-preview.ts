@@ -95,6 +95,15 @@ const drawScreen = (
   context.restore()
 }
 
+const ellipsize = (context: CanvasRenderingContext2D, text: string, maxWidth: number): string => {
+  if (context.measureText(text).width <= maxWidth) return text
+  let trimmed = text.replace(/…$/, '')
+  while (trimmed.length > 1 && context.measureText(`${trimmed}…`).width > maxWidth) {
+    trimmed = trimmed.slice(0, -1)
+  }
+  return `${trimmed}…`
+}
+
 const wrapProjectName = (
   context: CanvasRenderingContext2D,
   name: string,
@@ -111,18 +120,17 @@ const wrapProjectName = (
     } else {
       current = candidate
     }
-    if (lines.length === 2) break
   }
-  if (lines.length < 2 && current !== '') lines.push(current)
-  const lastLine = lines[lines.length - 1]
-  if (lastLine && context.measureText(lastLine).width > maxWidth) {
-    let trimmed = lastLine
-    while (trimmed.length > 1 && context.measureText(`${trimmed}…`).width > maxWidth) {
-      trimmed = trimmed.slice(0, -1)
-    }
-    lines[lines.length - 1] = `${trimmed}…`
-  }
-  return lines
+  if (current !== '') lines.push(current)
+
+  // At most two lines fit the layout; a dropped remainder gets an ellipsis so
+  // truncation is visible.
+  const shown = lines.slice(0, 2)
+  const overflowed = lines.length > shown.length
+  return shown.map((line, index) => {
+    const marked = overflowed && index === shown.length - 1 ? `${line}…` : line
+    return ellipsize(context, marked, maxWidth)
+  })
 }
 
 const drawBackdrop = (context: CanvasRenderingContext2D, slide: Slide | undefined) => {

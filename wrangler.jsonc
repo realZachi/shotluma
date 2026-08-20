@@ -15,6 +15,19 @@
       "id": "a5c85baed396460b8f79536f88692afc"
     }
   ],
+  "unsafe": {
+    "bindings": [
+      {
+        "type": "ratelimit",
+        "name": "SHARE_RATE",
+        "namespace_id": "2101",
+        "simple": {
+          "limit": 10,
+          "period": 60
+        }
+      }
+    ]
+  },
   "routes": [
     {
       "pattern": "app.shotluma.com",

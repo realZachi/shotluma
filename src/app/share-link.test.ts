@@ -144,7 +144,10 @@ describe('share links', () => {
 
     const decoded = await decodeSharePayload(`${SHORT_SHARE_HASH_PREFIX}abcDEF123456`)
     expect(decoded).toEqual(project)
-    expect(download).toHaveBeenCalledWith('/api/share/abcDEF123456')
+    expect(download).toHaveBeenCalledWith(
+      '/api/share/abcDEF123456',
+      expect.objectContaining({ signal: expect.any(AbortSignal) as unknown }),
+    )
   })
 
   it('rejects malformed short ids without calling the API', async () => {

@@ -58,6 +58,7 @@ type SharedImportResult =
 const importSharedProject = async (existingProjects: ProjectSummary[]): Promise<SharedImportResult> => {
   const sharedHash = consumeShareLinkHash()
   if (!sharedHash) return { status: 'none' }
+  sharedImportPending = true
   try {
     const shared = await decodeSharePayload(sharedHash)
     if (!shared) return { status: 'invalid' }
@@ -78,10 +79,21 @@ const importSharedProject = async (existingProjects: ProjectSummary[]): Promise<
 // so both runs must share a single import request — otherwise the shared
 // project is either lost or saved twice.
 let sharedImportRequest: Promise<SharedImportResult> | null = null
+let sharedImportPending = false
 
 const importSharedProjectOnce = (existingProjects: ProjectSummary[]): Promise<SharedImportResult> => {
   sharedImportRequest ??= importSharedProject(existingProjects)
   return sharedImportRequest
+}
+
+/**
+ * Marks the import as fully handled. Later effect runs (dependency identity
+ * changes) then resolve to 'none' instead of re-applying the imported project
+ * or re-showing its toast.
+ */
+const settleSharedImport = () => {
+  sharedImportPending = false
+  sharedImportRequest = Promise.resolve({ status: 'none' })
 }
 
 export function useProjectWorkspace({
@@ -169,11 +181,20 @@ export function useProjectWorkspace({
         } else if (sharedImport.status === 'invalid') {
           setToast('Couldn’t open the shared project link')
         }
+        if (sharedImport.status !== 'none') settleSharedImport()
         removeLegacyProject()
         skipNextAutoSaveRef.current = true
         setSaveStatus('saved')
       } catch {
-        if (!isCancelled()) setSaveStatus('error')
+        if (!isCancelled()) {
+          // The share fragment is already consumed, so a hydration failure
+          // must still tell the user their shared link went nowhere.
+          if (sharedImportPending) {
+            settleSharedImport()
+            setToast('Couldn’t open the shared project link')
+          }
+          setSaveStatus('error')
+        }
       } finally {
         if (!isCancelled()) {
           persistenceReadyRef.current = true

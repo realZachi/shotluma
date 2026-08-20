@@ -107,9 +107,10 @@ as WebP when that is smaller). Two link forms exist:
   per-share Open Graph tags injected (project name plus a 1200 × 630 unfurl
   image that `src/app/share-preview.ts` renders client-side from the live
   artboards and uploads best-effort at share time). The app consumes the path
-  on boot and rewrites the URL back to `/`; `#s=<id>` links stay readable.
-  During local dev the Vite server proxies `/api/share` to the deployed
-  Worker.
+  on boot and rewrites the URL back to `/`. The equivalent `#s=<id>` fragment
+  form is also consumed on boot as a compatibility format — it just cannot
+  carry per-share OG tags because crawlers never send fragments. During local
+  dev the Vite server proxies `/api/share` to the deployed Worker.
 - `#share=<base64url payload>` (fallback): when the share API is unreachable
   the link carries the payload itself, so sharing degrades gracefully instead
   of failing; such links can get very long and the dialog says so.

@@ -44,6 +44,10 @@ const SHARE_API_PATH = '/api/share'
 const SHARE_ID_PATTERN = /^[A-Za-z0-9_-]{6,32}$/
 const SHARE_FORMAT_VERSION = 1
 
+// A stalled share API request must degrade to the inline fallback (or a
+// failed import) instead of leaving the dialog on "Preparing link …" forever.
+const SHARE_API_TIMEOUT_MS = 15_000
+
 // Ceiling for the decompressed payload so a handcrafted link cannot act as a
 // decompression bomb against the importing tab.
 const MAX_DECODED_BYTES = 64 * 1024 * 1024
@@ -160,6 +164,7 @@ const requestShortShareId = async (payload: Uint8Array<ArrayBuffer>): Promise<st
       method: 'POST',
       headers: { 'content-type': 'application/octet-stream' },
       body: payload,
+      signal: AbortSignal.timeout(SHARE_API_TIMEOUT_MS),
     })
     if (!response.ok) return null
     const result = (await response.json()) as { id?: unknown }
@@ -179,6 +184,7 @@ const uploadSharePreview = async (id: string, title: string, preview: Blob | nul
       method: 'POST',
       headers: { 'content-type': 'image/jpeg' },
       body: preview ?? new Blob([]),
+      signal: AbortSignal.timeout(SHARE_API_TIMEOUT_MS),
     })
   } catch {
     // See above.
@@ -277,7 +283,9 @@ const normalizeSharedProject = (value: unknown): SharedProjectPayload | null => 
 
 const fetchStoredPayloadBytes = async (id: string): Promise<Uint8Array<ArrayBuffer> | null> => {
   if (!SHARE_ID_PATTERN.test(id)) return null
-  const response = await fetch(`${SHARE_API_PATH}/${id}`)
+  const response = await fetch(`${SHARE_API_PATH}/${id}`, {
+    signal: AbortSignal.timeout(SHARE_API_TIMEOUT_MS),
+  })
   if (!response.ok) return null
   return new Uint8Array(await response.arrayBuffer())
 }

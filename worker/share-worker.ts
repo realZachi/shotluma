@@ -19,9 +19,15 @@ type ShareKv = {
   put(key: string, value: ArrayBuffer | string, options?: { expirationTtl?: number }): Promise<void>
 }
 
+type RateLimiter = {
+  limit(options: { key: string }): Promise<{ success: boolean }>
+}
+
 type Env = {
   SHARE_KV: ShareKv
   ASSETS: { fetch(request: Request): Promise<Response> }
+  /** Optional Workers rate-limiting binding; writes are allowed when absent. */
+  SHARE_RATE?: RateLimiter
 }
 
 /** Must stay at or below the client cap so accepted uploads always fit KV. */
@@ -64,7 +70,34 @@ const escapeHtml = (value: string): string =>
     .replaceAll('"', '&quot;')
     .replaceAll('\'', '&#39;')
 
+/** Rejects oversized uploads before buffering the body. */
+const declaredLengthExceeds = (request: Request, maxBytes: number): boolean => {
+  const declared = Number(request.headers.get('content-length') ?? '0')
+  return Number.isFinite(declared) && declared > maxBytes
+}
+
+/**
+ * Best-effort write throttle per client IP. The binding is optional so a
+ * deployment without it stays functional.
+ */
+const writeAllowed = async (request: Request, env: Env): Promise<boolean> => {
+  if (!env.SHARE_RATE) return true
+  const key = request.headers.get('cf-connecting-ip') ?? 'unknown'
+  try {
+    return (await env.SHARE_RATE.limit({ key })).success
+  } catch {
+    return true
+  }
+}
+
+const rateLimited = (): Response =>
+  jsonResponse({ error: 'Too many shares — try again in a minute.' }, 429)
+
 const storeShare = async (request: Request, env: Env): Promise<Response> => {
+  if (declaredLengthExceeds(request, MAX_PAYLOAD_BYTES)) {
+    return jsonResponse({ error: 'The share payload is too large.' }, 413)
+  }
+  if (!await writeAllowed(request, env)) return rateLimited()
   const payload = await request.arrayBuffer()
   if (payload.byteLength === 0) return jsonResponse({ error: 'The share payload is empty.' }, 400)
   if (payload.byteLength > MAX_PAYLOAD_BYTES) {
@@ -76,6 +109,10 @@ const storeShare = async (request: Request, env: Env): Promise<Response> => {
 }
 
 const storeSharePreview = async (id: string, request: Request, env: Env): Promise<Response> => {
+  if (declaredLengthExceeds(request, MAX_PREVIEW_BYTES)) {
+    return jsonResponse({ error: 'The share preview is too large.' }, 413)
+  }
+  if (!await writeAllowed(request, env)) return rateLimited()
   const existing = await env.SHARE_KV.get(id, 'arrayBuffer')
   if (!existing) return jsonResponse({ error: 'This share link has expired or does not exist.' }, 404)
 
@@ -98,6 +135,7 @@ const readShare = async (id: string, env: Env): Promise<Response> => {
     headers: {
       'content-type': 'application/octet-stream',
       'cache-control': 'public, max-age=3600',
+      'x-content-type-options': 'nosniff',
     },
   })
 }
@@ -109,6 +147,7 @@ const readSharePreview = async (id: string, env: Env): Promise<Response> => {
     headers: {
       'content-type': 'image/jpeg',
       'cache-control': 'public, max-age=3600',
+      'x-content-type-options': 'nosniff',
     },
   })
 }
@@ -124,13 +163,21 @@ const readShareTitle = async (id: string, env: Env): Promise<string> => {
   }
 }
 
+// index.html ships static og:/twitter: tags for the editor itself. Crawlers
+// often honor the first tag they see, so the defaults must be removed before
+// the per-share tags are injected.
+const stripDefaultSocialTags = (html: string): string =>
+  html.replace(/[ \t]*<meta (?:property="og:|name="twitter:)[^>]*>\n?/g, '')
+
 /** Serves the editor with per-share OG tags so pasted links unfurl nicely. */
 const sharePage = async (id: string, url: URL, env: Env): Promise<Response> => {
   const assetResponse = await env.ASSETS.fetch(new Request(new URL('/', url).toString()))
-  const html = await assetResponse.text()
+  if (!assetResponse.ok) return assetResponse
+  const html = stripDefaultSocialTags(await assetResponse.text())
   const title = await readShareTitle(id, env)
   const pageTitle = escapeHtml(title === '' ? 'Shared Shotluma project' : `${title} — Shotluma`)
   const tags = [
+    '<meta property="og:site_name" content="Shotluma">',
     `<meta property="og:title" content="${pageTitle}">`,
     '<meta property="og:description" content="App Store screens shared with Shotluma. Open the link to get your own editable copy.">',
     '<meta property="og:type" content="website">',
