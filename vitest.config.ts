@@ -22,6 +22,7 @@ export default defineConfig({
         'src/asset-sources.ts',
         'src/app/project-utils.ts',
         'src/app/share-link.ts',
+        'src/app/share-preview-palette.ts',
         'src/editor/drag-bounds.ts',
         'src/editor/element-utils.ts',
         'src/editor/nudge.ts',

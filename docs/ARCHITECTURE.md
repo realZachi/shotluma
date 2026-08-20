@@ -107,7 +107,8 @@ as WebP when that is smaller). Two link forms exist:
   never send fragments: `GET /s/<id>` serves the editor's index.html with
   per-share Open Graph tags injected (project name plus a 1200 × 630 unfurl
   image that `src/app/share-preview.ts` renders client-side from the live
-  artboards and uploads best-effort at share time). The app consumes the path
+  artboards, using colors sampled from the rendered first screen for its
+  backdrop, and uploads best-effort at share time). The app consumes the path
   on boot and rewrites the URL back to `/`. The equivalent `#s=<id>` fragment
   form is also consumed on boot as a compatibility format — it just cannot
   carry per-share OG tags because crawlers never send fragments. During local

@@ -1,11 +1,12 @@
 import { toCanvas } from 'html-to-image'
 import { EXPORT_ARTBOARD_WIDTH, EXPORT_FORMATS } from './export-formats'
+import { deriveSharePreviewPalette, type SharePreviewPalette } from './share-preview-palette'
 import type { Slide } from '../types'
 
 /**
  * Renders the Open Graph preview image for a share link: up to three screens
- * captured from the live artboard DOM, composed on a gradient drawn from the
- * first screen's background colors, with the project name set in the UI face.
+ * captured from the live artboard DOM, composed on a gradient sampled from the
+ * rendered first screen, with the project name set in the UI face.
  * The share flow treats the preview as best-effort — any failure returns null
  * and the link still works, it just unfurls without an image.
  */
@@ -133,9 +134,25 @@ const wrapProjectName = (
   })
 }
 
-const drawBackdrop = (context: CanvasRenderingContext2D, slide: Slide | undefined) => {
-  const color1 = slide?.background.color1 ?? '#101014'
-  const color2 = slide?.background.color2 ?? '#1c1c26'
+const fallbackPalette = (slide: Slide | undefined): SharePreviewPalette => ({
+  color1: slide?.background.color1 ?? '#101014',
+  color2: slide?.background.color2 ?? '#1c1c26',
+})
+
+const renderedPalette = (screen: HTMLCanvasElement | null | undefined): SharePreviewPalette | null => {
+  if (!screen) return null
+  const context = screen.getContext('2d', { willReadFrequently: true })
+  if (!context) return null
+  try {
+    const pixels = context.getImageData(0, 0, screen.width, screen.height).data
+    return deriveSharePreviewPalette(pixels, screen.width, screen.height)
+  } catch {
+    return null
+  }
+}
+
+const drawBackdrop = (context: CanvasRenderingContext2D, palette: SharePreviewPalette) => {
+  const { color1, color2 } = palette
   const gradient = context.createLinearGradient(0, 0, SHARE_PREVIEW_WIDTH, SHARE_PREVIEW_HEIGHT)
   gradient.addColorStop(0, parseHexColor(color1) ? color1 : '#101014')
   gradient.addColorStop(1, parseHexColor(color2) ? color2 : '#1c1c26')
@@ -208,7 +225,8 @@ export const createSharePreviewImage = async (
     const context = canvas.getContext('2d')
     if (!context) return null
 
-    const onLight = drawBackdrop(context, shown[0])
+    const palette = renderedPalette(screens[0]) ?? fallbackPalette(shown[0])
+    const onLight = drawBackdrop(context, palette)
     screens
       .map((screen, index) => ({ screen, placement: placements[index] }))
       .filter((entry): entry is { screen: HTMLCanvasElement; placement: ScreenPlacement } =>
