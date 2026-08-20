@@ -1,7 +1,7 @@
 /**
- * Share API for short project links, deployed as the script of the
- * `shotluma-app` Worker (static assets keep serving the editor; only
- * `/api/share*` and `/s/*` run this code via `run_worker_first`).
+ * Share API for short project links, mounted into the `shotluma-app` Worker
+ * entry (`scripts/shotluma-worker.ts`); `run_worker_first` routes only
+ * `/api/share*` and `/s/*` through the Worker script for it.
  *
  * The API stores opaque, client-compressed share payloads in KV and hands
  * back a short id. It never inspects project content — decoding, validation,
@@ -23,7 +23,7 @@ type RateLimiter = {
   limit(options: { key: string }): Promise<{ success: boolean }>
 }
 
-type Env = {
+export type ShareApiEnv = {
   SHARE_KV: ShareKv
   ASSETS: { fetch(request: Request): Promise<Response> }
   /** Optional Workers rate-limiting binding; writes are allowed when absent. */
@@ -80,7 +80,7 @@ const declaredLengthExceeds = (request: Request, maxBytes: number): boolean => {
  * Best-effort write throttle per client IP. The binding is optional so a
  * deployment without it stays functional.
  */
-const writeAllowed = async (request: Request, env: Env): Promise<boolean> => {
+const writeAllowed = async (request: Request, env: ShareApiEnv): Promise<boolean> => {
   if (!env.SHARE_RATE) return true
   const key = request.headers.get('cf-connecting-ip') ?? 'unknown'
   try {
@@ -93,7 +93,7 @@ const writeAllowed = async (request: Request, env: Env): Promise<boolean> => {
 const rateLimited = (): Response =>
   jsonResponse({ error: 'Too many shares — try again in a minute.' }, 429)
 
-const storeShare = async (request: Request, env: Env): Promise<Response> => {
+const storeShare = async (request: Request, env: ShareApiEnv): Promise<Response> => {
   if (declaredLengthExceeds(request, MAX_PAYLOAD_BYTES)) {
     return jsonResponse({ error: 'The share payload is too large.' }, 413)
   }
@@ -108,7 +108,7 @@ const storeShare = async (request: Request, env: Env): Promise<Response> => {
   return jsonResponse({ id })
 }
 
-const storeSharePreview = async (id: string, request: Request, env: Env): Promise<Response> => {
+const storeSharePreview = async (id: string, request: Request, env: ShareApiEnv): Promise<Response> => {
   if (declaredLengthExceeds(request, MAX_PREVIEW_BYTES)) {
     return jsonResponse({ error: 'The share preview is too large.' }, 413)
   }
@@ -128,7 +128,7 @@ const storeSharePreview = async (id: string, request: Request, env: Env): Promis
   return jsonResponse({ ok: true })
 }
 
-const readShare = async (id: string, env: Env): Promise<Response> => {
+const readShare = async (id: string, env: ShareApiEnv): Promise<Response> => {
   const payload = await env.SHARE_KV.get(id, 'arrayBuffer')
   if (!payload) return jsonResponse({ error: 'This share link has expired or does not exist.' }, 404)
   return new Response(payload, {
@@ -140,7 +140,7 @@ const readShare = async (id: string, env: Env): Promise<Response> => {
   })
 }
 
-const readSharePreview = async (id: string, env: Env): Promise<Response> => {
+const readSharePreview = async (id: string, env: ShareApiEnv): Promise<Response> => {
   const preview = await env.SHARE_KV.get(previewKey(id), 'arrayBuffer')
   if (!preview) return new Response('Not found', { status: 404 })
   return new Response(preview, {
@@ -152,7 +152,7 @@ const readSharePreview = async (id: string, env: Env): Promise<Response> => {
   })
 }
 
-const readShareTitle = async (id: string, env: Env): Promise<string> => {
+const readShareTitle = async (id: string, env: ShareApiEnv): Promise<string> => {
   try {
     const meta = await env.SHARE_KV.get(metaKey(id), 'text')
     if (!meta) return ''
@@ -170,7 +170,7 @@ const stripDefaultSocialTags = (html: string): string =>
   html.replace(/[ \t]*<meta (?:property="og:|name="twitter:)[^>]*>\n?/g, '')
 
 /** Serves the editor with per-share OG tags so pasted links unfurl nicely. */
-const sharePage = async (id: string, url: URL, env: Env): Promise<Response> => {
+const sharePage = async (id: string, url: URL, env: ShareApiEnv): Promise<Response> => {
   const assetResponse = await env.ASSETS.fetch(new Request(new URL('/', url).toString()))
   if (!assetResponse.ok) return assetResponse
   const html = stripDefaultSocialTags(await assetResponse.text())
@@ -195,7 +195,7 @@ const sharePage = async (id: string, url: URL, env: Env): Promise<Response> => {
   })
 }
 
-const routeShareApi = (segments: string[], request: Request, env: Env): Promise<Response> | Response => {
+const routeShareApi = (segments: string[], request: Request, env: ShareApiEnv): Promise<Response> | Response => {
   const [id, action] = segments
   if (!id || !SHARE_ID_PATTERN.test(id)) return invalidShareId()
   if (action === undefined) {
@@ -209,23 +209,26 @@ const routeShareApi = (segments: string[], request: Request, env: Env): Promise<
   return new Response('Not found', { status: 404 })
 }
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url)
-    if (url.pathname === SHARE_API_PATH) {
-      return request.method === 'POST' ? storeShare(request, env) : methodNotAllowed('POST')
-    }
-    if (url.pathname.startsWith(`${SHARE_API_PATH}/`)) {
-      const segments = url.pathname.slice(SHARE_API_PATH.length + 1).split('/')
-      return routeShareApi(segments, request, env)
-    }
-    if (url.pathname.startsWith(SHARE_PAGE_PREFIX)) {
-      const id = url.pathname.slice(SHARE_PAGE_PREFIX.length)
-      if (SHARE_ID_PATTERN.test(id) && request.method === 'GET') return sharePage(id, url, env)
-      // Fall through: unknown /s/ paths behave like any other SPA route.
-    }
-    // `run_worker_first` only routes /api/share* and /s/* here, but keep
-    // non-API requests working if that configuration ever widens.
-    return env.ASSETS.fetch(request)
-  },
+/**
+ * Handles a share API or share page request; returns null for every other
+ * request so the Worker entry can continue with its remaining routes.
+ */
+export const handleShareRequest = (
+  request: Request,
+  env: ShareApiEnv,
+): Promise<Response> | Response | null => {
+  const url = new URL(request.url)
+  if (url.pathname === SHARE_API_PATH) {
+    return request.method === 'POST' ? storeShare(request, env) : methodNotAllowed('POST')
+  }
+  if (url.pathname.startsWith(`${SHARE_API_PATH}/`)) {
+    const segments = url.pathname.slice(SHARE_API_PATH.length + 1).split('/')
+    return routeShareApi(segments, request, env)
+  }
+  if (url.pathname.startsWith(SHARE_PAGE_PREFIX)) {
+    const id = url.pathname.slice(SHARE_PAGE_PREFIX.length)
+    if (SHARE_ID_PATTERN.test(id) && request.method === 'GET') return sharePage(id, url, env)
+    // Unknown /s/ paths behave like any other SPA route.
+  }
+  return null
 }

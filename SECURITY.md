@@ -32,8 +32,8 @@ Maintainers will acknowledge reports and coordinate a fix and disclosure on a be
 - `.env.local` is ignored by Git and must remain untracked.
 - Production builds replace provider env keys with empty values. Do not remove this build boundary or publish a manually altered keyed bundle.
 - Uploaded images and projects stay in IndexedDB during normal editing.
-- Screenshots selected for an AI run are sent to the selected provider. Google, Qwen, OpenAI, Anthropic, and xAI are contacted directly; Moonshot works only on localhost through the same-origin local CORS proxy. Opt-in overlay generation contacts OpenAI separately.
+- Screenshots selected for an AI run are sent to the selected provider. Google, Qwen, OpenAI, Anthropic, and xAI are contacted directly; Moonshot works only on localhost through the same-origin local CORS proxy. OpenCode Zen and Go use the same-origin `/api/opencode` proxy. Opt-in overlay generation contacts OpenAI separately.
 - Users are responsible for protecting provider keys and usage quotas.
-- A hosted deployment can use browser-entered keys with the direct providers. A deployment that supplies shared credentials or offers Moonshot requires a separate authenticated backend design.
+- A hosted deployment can use browser-entered keys with the direct providers and OpenCode. A deployment that supplies shared credentials or offers Moonshot requires a separate authenticated backend design.
 
 If a key is accidentally exposed, revoke it at the provider immediately, remove it from the current files, and treat it as compromised even if the Git commit is later rewritten.

@@ -46,7 +46,7 @@ The Cloudflare custom domain is source-controlled in `wrangler.jsonc`. Do not
 attach this Worker to the apex domain, and do not add marketing-site source,
 styles, assets, or production-only configuration to this repository.
 
-The Worker also runs the share API (`worker/share-worker.ts`) for short
+The Worker also runs the share API (`scripts/share-api.ts`) for short
 project share links. It stores opaque share payloads in the `SHARE_KV` KV
 namespace referenced in `wrangler.jsonc`; the API token therefore needs
 Workers KV Storage edit permission (included in the standard Edit Cloudflare

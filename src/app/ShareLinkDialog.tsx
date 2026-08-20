@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, Copy, Link01 } from '../components/icons'
 import {
   AlertDialog,
@@ -31,6 +31,20 @@ const formatLinkSize = (length: number) => (length >= 1024 * 1024
   ? `${(length / (1024 * 1024)).toFixed(1)} MB`
   : `${Math.max(1, Math.round(length / 1024))} KB`)
 
+type ShareRequestKey = readonly [string, Slide[], UploadAsset[]]
+
+// Everything shown by the dialog is keyed to the inputs that produced it, so
+// a change to the project while the dialog is open (for example an AI run
+// mutating slides) immediately renders as pending instead of surfacing the
+// previous project's link or error.
+type ShareState = {
+  key: ShareRequestKey
+  result: ShareLinkResult | null
+  failed: boolean
+  copied: boolean
+  copyFailed: boolean
+}
+
 export function ShareLinkDialog({
   open,
   projectName,
@@ -38,35 +52,35 @@ export function ShareLinkDialog({
   uploads,
   onOpenChange,
 }: ShareLinkDialogProps) {
-  const [link, setLink] = useState<ShareLinkResult | null>(null)
-  const [failed, setFailed] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [copyFailed, setCopyFailed] = useState(false)
+  const [state, setState] = useState<ShareState | null>(null)
+  const key = useMemo<ShareRequestKey>(
+    () => [projectName, slides, uploads],
+    [projectName, slides, uploads],
+  )
+  const active = state !== null && state.key === key ? state : null
+  const link = active?.result ?? null
+  const failed = active?.failed ?? false
 
   useEffect(() => {
     if (!open) return
     let cancelled = false
-    createShareLink({ projectName, slides, uploads }, {
-      createPreview: () => createSharePreviewImage(projectName, slides),
+    const [name, keyedSlides, keyedUploads] = key
+    createShareLink({ projectName: name, slides: keyedSlides, uploads: keyedUploads }, {
+      createPreview: () => createSharePreviewImage(name, keyedSlides),
     })
       .then((result) => {
-        if (!cancelled) setLink(result)
+        if (!cancelled) setState({ key, result, failed: false, copied: false, copyFailed: false })
       })
       .catch(() => {
-        if (!cancelled) setFailed(true)
+        if (!cancelled) setState({ key, result: null, failed: true, copied: false, copyFailed: false })
       })
     return () => {
       cancelled = true
     }
-  }, [open, projectName, slides, uploads])
+  }, [open, key])
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      setLink(null)
-      setFailed(false)
-      setCopied(false)
-      setCopyFailed(false)
-    }
+    if (!nextOpen) setState(null)
     onOpenChange(nextOpen)
   }
 
@@ -74,10 +88,9 @@ export function ShareLinkDialog({
     if (!link) return
     try {
       await navigator.clipboard.writeText(link.url)
-      setCopied(true)
-      setCopyFailed(false)
+      setState((current) => current && { ...current, copied: true, copyFailed: false })
     } catch {
-      setCopyFailed(true)
+      setState((current) => current && { ...current, copyFailed: true })
     }
   }
 
@@ -109,7 +122,7 @@ export function ShareLinkDialog({
                       ? ' Some messengers truncate links this size.'
                       : ''}`}
               </p>
-              {copyFailed && (
+              {active?.copyFailed && (
                 <>
                   <p className="share-link-dialog-error">
                     Copying was blocked by the browser — select the link below instead.
@@ -134,7 +147,7 @@ export function ShareLinkDialog({
             disabled={!link}
             onClick={() => void copyLink()}
           >
-            {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy link</>}
+            {active?.copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy link</>}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

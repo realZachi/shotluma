@@ -22,6 +22,7 @@ type AiProviderEnvironment = {
   VITE_ANTHROPIC_API_KEY?: unknown
   VITE_XAI_API_KEY?: unknown
   VITE_OPENROUTER_API_KEY?: unknown
+  VITE_OPENCODE_API_KEY?: unknown
 }
 
 export const AI_PROVIDER_KEYS_STORAGE_KEY = 'shotluma-ai-provider-keys'
@@ -40,20 +41,27 @@ export const createEmptyAiProviderKeys = (): AiProviderKeys => ({
   anthropic: '',
   xai: '',
   openrouter: '',
+  'opencode-zen': '',
+  'opencode-go': '',
 })
 
 export const createAiProviderKeys = (
   environment: AiProviderEnvironment,
-): AiProviderKeys => ({
-  codex: '',
-  moonshot: readKey(environment.VITE_MOONSHOT_API_KEY),
-  google: readKey(environment.VITE_GOOGLE_GENERATIVE_AI_API_KEY),
-  qwen: readKey(environment.VITE_ALIBABA_API_KEY),
-  openai: readKey(environment.VITE_OPENAI_API_KEY),
-  anthropic: readKey(environment.VITE_ANTHROPIC_API_KEY),
-  xai: readKey(environment.VITE_XAI_API_KEY),
-  openrouter: readKey(environment.VITE_OPENROUTER_API_KEY),
-})
+): AiProviderKeys => {
+  const opencode = readKey(environment.VITE_OPENCODE_API_KEY)
+  return {
+    codex: '',
+    moonshot: readKey(environment.VITE_MOONSHOT_API_KEY),
+    google: readKey(environment.VITE_GOOGLE_GENERATIVE_AI_API_KEY),
+    qwen: readKey(environment.VITE_ALIBABA_API_KEY),
+    openai: readKey(environment.VITE_OPENAI_API_KEY),
+    anthropic: readKey(environment.VITE_ANTHROPIC_API_KEY),
+    xai: readKey(environment.VITE_XAI_API_KEY),
+    openrouter: readKey(environment.VITE_OPENROUTER_API_KEY),
+    'opencode-zen': opencode,
+    'opencode-go': opencode,
+  }
+}
 
 export const getAiProviderAvailability = (
   keys: AiProviderKeys,
@@ -66,6 +74,8 @@ export const getAiProviderAvailability = (
   anthropic: keys.anthropic.length > 0,
   xai: keys.xai.length > 0,
   openrouter: keys.openrouter.length > 0,
+  'opencode-zen': keys['opencode-zen'].length > 0,
+  'opencode-go': keys['opencode-go'].length > 0,
 })
 
 const getBrowserHostname = (): string => {
@@ -95,6 +105,8 @@ export const getAiProviderTransportAvailability = (
   anthropic: true,
   xai: true,
   openrouter: true,
+  'opencode-zen': true,
+  'opencode-go': true,
 })
 
 export const mergeAiProviderKeys = (
@@ -125,6 +137,11 @@ export const parseStoredAiProviderKeys = (raw: string | null): AiProviderKeys =>
   for (const providerId of PROVIDER_IDS) {
     keys[providerId] = readKey(record[providerId])
   }
+  const sharedOpencode = readKey(record['opencode'])
+    || keys['opencode-zen']
+    || keys['opencode-go']
+  keys['opencode-zen'] = sharedOpencode
+  keys['opencode-go'] = sharedOpencode
   return keys
 }
 
@@ -232,6 +249,7 @@ export const ENVIRONMENT_AI_PROVIDER_KEYS = createAiProviderKeys({
   VITE_ANTHROPIC_API_KEY: import.meta.env.VITE_ANTHROPIC_API_KEY,
   VITE_XAI_API_KEY: import.meta.env.VITE_XAI_API_KEY,
   VITE_OPENROUTER_API_KEY: import.meta.env.VITE_OPENROUTER_API_KEY,
+  VITE_OPENCODE_API_KEY: import.meta.env.VITE_OPENCODE_API_KEY,
 })
 
 export const AI_PROVIDER_AVAILABILITY = getResolvedAiProviderAvailability()

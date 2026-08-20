@@ -17,6 +17,7 @@ describe('client provider environment', () => {
     expect(values.VITE_MOONSHOT_API_KEY).toBe('moonshot-public')
     expect(values.VITE_OPENAI_API_KEY).toBe('openai-public')
     expect(values.VITE_XAI_API_KEY).toBe('')
+    expect(values.VITE_OPENCODE_API_KEY).toBe('')
     expect(values).not.toHaveProperty('MOONSHOT_API_KEY')
   })
 
@@ -28,6 +29,7 @@ describe('client provider environment', () => {
       VITE_OPENAI_API_KEY: '',
       VITE_ANTHROPIC_API_KEY: '',
       VITE_XAI_API_KEY: '',
+      VITE_OPENCODE_API_KEY: '',
     })
     expect(createClientProviderDefinitions(environment, 'build')).toMatchObject({
       'import.meta.env.VITE_MOONSHOT_API_KEY': '""',

@@ -19,5 +19,5 @@
     "moduleDetection": "force",
     "noEmit": true
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "scripts", "worker"]
+  "include": ["vite.config.ts", "vitest.config.ts", "scripts"]
 }

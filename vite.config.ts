@@ -10,17 +10,29 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const aiLoggingValue = env['SHOTLUMA_AI_LOGGING'] ?? env['FRAMEFLOW_AI_LOGGING']
   const isAiLoggingEnabled = aiLoggingValue?.trim().toLowerCase() === 'true'
-  const moonshotProxy = {
+  const moonshotAndOpencodeProxy = {
     '/api/moonshot': {
       target: 'https://api.moonshot.ai',
       changeOrigin: true,
       rewrite: (requestPath: string) => requestPath.replace(/^\/api\/moonshot/, ''),
     },
+    '/api/opencode/go': {
+      target: 'https://opencode.ai',
+      changeOrigin: true,
+      rewrite: (requestPath: string) =>
+        requestPath.replace(/^\/api\/opencode\/go/, '/zen/go') || '/zen/go',
+    },
+    '/api/opencode/zen': {
+      target: 'https://opencode.ai',
+      changeOrigin: true,
+      rewrite: (requestPath: string) =>
+        requestPath.replace(/^\/api\/opencode\/zen/, '/zen') || '/zen',
+    },
   }
   // Local dev has no share Worker, so short share links go through the
   // deployed one; the client falls back to self-contained links on failure.
   const devProxy = {
-    ...moonshotProxy,
+    ...moonshotAndOpencodeProxy,
     '/api/share': {
       target: 'https://app.shotluma.com',
       changeOrigin: true,

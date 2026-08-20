@@ -14,7 +14,21 @@ import { relayChatToolImages } from './chat-tool-images'
 import { runCodexAppServerGeneration } from './codex-app-server'
 import { readCodexConnection } from './codex-connection'
 import { scopeAiControllerToSlide, type AiEditorController } from './controller'
+import { collectMessageImages, describeMessageImages } from './describe-images'
 import { buildHtmlInstructions } from './html-prompt'
+import {
+  createOpencodeImageDescriber,
+  createOpencodeModel,
+} from './opencode-client'
+import {
+  opencodeDialectNeedsChatToolImageRelay,
+  opencodeSelectionDialect,
+} from './opencode-dialects'
+import {
+  isOpencodeProviderId,
+  opencodeRequestModelId,
+  pickOpencodeVisionModel,
+} from './opencode-models'
 import { buildInstructions, buildUserMessage } from './prompt'
 import {
   buildStreamRequestOptions,
@@ -26,6 +40,8 @@ import {
   getAiModel,
   getAiProvider,
   getAiSdkReasoningEffort,
+  getDynamicProviderModels,
+  modelSupportsVision,
   type AiModelSelection,
 } from './provider-catalog'
 import {
@@ -107,7 +123,9 @@ const buildUserContent = (options: {
 
 const createAiModel = async (selection: AiModelSelection) => {
   if (!getAiProviderTransportAvailability()[selection.provider]) {
-    throw new Error('Moonshot requires the local Shotluma CORS proxy and is unavailable on this host')
+    throw new Error(
+      `${getAiProvider(selection.provider).label} requires the local Shotluma CORS proxy and is unavailable on this host`,
+    )
   }
   const apiKey = getAiProviderKey(selection.provider)
   if (!apiKey) {
@@ -161,6 +179,15 @@ const createAiModel = async (selection: AiModelSelection) => {
           'X-Title': 'Shotluma',
         },
       }).chat(selection.model)
+    }
+    case 'opencode-zen':
+    case 'opencode-go': {
+      const model = getAiModel(selection)
+      return createOpencodeModel({
+        providerId: selection.provider,
+        modelId: opencodeRequestModelId(model.id, model.providerModelId),
+        apiKey,
+      })
     }
   }
 }
@@ -304,7 +331,99 @@ const collectStreamPart = <TOOLS extends ToolSet>(options: {
  */
 export const NARRATION_WORD_DELAY_MS = 18
 
-export const narrationSmoothing = () => smoothStream<ToolSet>({ delayInMs: NARRATION_WORD_DELAY_MS })
+export const narrationSmoothing = () =>
+  smoothStream<ToolSet>({ delayInMs: NARRATION_WORD_DELAY_MS })
+
+/**
+ * OpenCode serves each model on one of four dialects, and only its
+ * chat-completions models reject images inside tool results.
+ */
+const needsChatToolImageRelay = (selection: AiModelSelection): boolean => {
+  const dialect = opencodeSelectionDialect(selection)
+  if (dialect) return opencodeDialectNeedsChatToolImageRelay(dialect)
+  return selection.provider === 'moonshot'
+    || selection.provider === 'openrouter'
+    || selection.provider === 'qwen'
+}
+
+export type OpencodeVisionFallback = {
+  describeImage: ReturnType<typeof createOpencodeImageDescriber>
+  visionLabel: string
+}
+
+const needsOpencodeVisionFallback = (selection: AiModelSelection): boolean =>
+  isOpencodeProviderId(selection.provider) && !modelSupportsVision(getAiModel(selection))
+
+const resolveOpencodeVisionDescriber = (options: {
+  selection: AiModelSelection
+  apiKey: string
+  signal?: AbortSignal
+}): OpencodeVisionFallback | null => {
+  if (!isOpencodeProviderId(options.selection.provider)) return null
+  const model = getAiModel(options.selection)
+  if (modelSupportsVision(model)) return null
+  const catalog = [
+    ...getAiProvider(options.selection.provider).models,
+    ...getDynamicProviderModels(options.selection.provider),
+  ]
+  const vision = pickOpencodeVisionModel(
+    options.selection.provider,
+    catalog,
+    options.selection.visionModel,
+  )
+  if (!vision) {
+    throw new Error(
+      `${model.label} cannot see images, and no OpenCode vision model is available to describe them.`,
+    )
+  }
+  return {
+    visionLabel: vision.label,
+    describeImage: createOpencodeImageDescriber({
+      providerId: options.selection.provider,
+      visionModelId: opencodeRequestModelId(vision.id, vision.providerModelId),
+      apiKey: options.apiKey,
+      ...(options.signal ? { signal: options.signal } : {}),
+    }),
+  }
+}
+
+/**
+ * The resolver runs only once a prepared step actually contains an image, so
+ * a text-only OpenCode model without any vision fallback in the catalog can
+ * still run image-free requests; the missing-fallback error surfaces the
+ * moment a screenshot or slide preview enters the conversation.
+ */
+export const prepareGenerationMessages = async (options: {
+  messages: ModelMessage[]
+  movingCacheProvider: 'anthropic' | 'alibaba' | null
+  needsChatImageRelay: boolean
+  resolveVisionFallback: (() => OpencodeVisionFallback) | null
+  onStatus?: (message: string) => void
+  visionAnnouncement: { sent: boolean }
+  descriptionCache: Map<string, string>
+}): Promise<ModelMessage[]> => {
+  // Text-only models reject images anywhere, so the vision fallback also
+  // needs tool-result images relayed into user messages before describing.
+  const relayed = options.needsChatImageRelay || options.resolveVisionFallback !== null
+    ? relayChatToolImages(options.messages)
+    : options.messages
+  let next = relayed
+  if (options.resolveVisionFallback && collectMessageImages(relayed).length > 0) {
+    const visionFallback = options.resolveVisionFallback()
+    if (!options.visionAnnouncement.sent) {
+      options.visionAnnouncement.sent = true
+      options.onStatus?.(`Describing images with ${visionFallback.visionLabel}…`)
+    }
+    next = await describeMessageImages(
+      relayed,
+      visionFallback.describeImage,
+      options.descriptionCache,
+    )
+  }
+  return options.movingCacheProvider
+    ? withMovingCacheBreakpoint(next, options.movingCacheProvider)
+    : next
+}
 
 const openAiGenerationStream = (options: {
   model: Awaited<ReturnType<typeof createAiModel>>
@@ -317,6 +436,7 @@ const openAiGenerationStream = (options: {
   signal?: AbortSignal
   onActivity?: (activity: AiToolActivity) => void
   onStepUsage?: (usage: LanguageModelUsage, toolNames: string[]) => void
+  onStatus?: (message: string) => void
 }) => {
   const {
     model,
@@ -329,6 +449,7 @@ const openAiGenerationStream = (options: {
     signal,
     onActivity,
     onStepUsage,
+    onStatus,
   } = options
   const runController = targetSlideId
     ? scopeAiControllerToSlide(controller, targetSlideId)
@@ -352,9 +473,23 @@ const openAiGenerationStream = (options: {
   const movingCacheProvider = selection.provider === 'anthropic'
     ? 'anthropic'
     : selection.provider === 'qwen' ? 'alibaba' : null
-  const needsChatImageRelay = selection.provider === 'moonshot'
-    || selection.provider === 'openrouter'
-    || selection.provider === 'qwen'
+  const needsChatImageRelay = needsChatToolImageRelay(selection)
+  let cachedVisionFallback: OpencodeVisionFallback | null = null
+  const resolveVisionFallback = needsOpencodeVisionFallback(selection)
+    ? (): OpencodeVisionFallback => {
+        cachedVisionFallback ??= resolveOpencodeVisionDescriber({
+          selection,
+          apiKey: getAiProviderKey(selection.provider),
+          ...(signal ? { signal } : {}),
+        })
+        if (!cachedVisionFallback) {
+          throw new Error(`${getAiModel(selection).label} has no vision fallback to describe images.`)
+        }
+        return cachedVisionFallback
+      }
+    : null
+  const visionAnnouncement = { sent: false }
+  const descriptionCache = new Map<string, string>()
 
   return streamText({
     model,
@@ -375,18 +510,19 @@ const openAiGenerationStream = (options: {
     ...requestOptions,
     // Anthropic and Alibaba require explicit message breakpoints. Keep one
     // moving forward so each step can reuse the growing tool-loop prefix.
-    ...(movingCacheProvider || needsChatImageRelay
+    ...(movingCacheProvider || needsChatImageRelay || resolveVisionFallback
       ? {
-          prepareStep: ({ messages }: { messages: ModelMessage[] }) => {
-            const relayed = needsChatImageRelay
-              ? relayChatToolImages(messages)
-              : messages
-            return {
-              messages: movingCacheProvider
-                ? withMovingCacheBreakpoint(relayed, movingCacheProvider)
-                : relayed,
-            }
-          },
+          prepareStep: async ({ messages }: { messages: ModelMessage[] }) => ({
+            messages: await prepareGenerationMessages({
+              messages,
+              movingCacheProvider,
+              needsChatImageRelay,
+              resolveVisionFallback,
+              ...(onStatus ? { onStatus } : {}),
+              visionAnnouncement,
+              descriptionCache,
+            }),
+          }),
         }
       : {}),
     ...(signal ? { abortSignal: signal } : {}),
@@ -499,6 +635,9 @@ const runDirectProviderGeneration = async (options: {
     ...(htmlMode ? { htmlMode: true } : {}),
     ...(signal ? { signal } : {}),
     ...(onActivity ? { onActivity } : {}),
+    onStatus: (message) => {
+      onEvent({ type: 'status', message })
+    },
     onStepUsage: (usage, toolNames) => {
       accumulator.steps.push({
         usage: toAiRunTokenUsage(usage),

@@ -42,6 +42,8 @@ const availableTransports = {
   anthropic: true,
   xai: true,
   openrouter: true,
+  'opencode-zen': true,
+  'opencode-go': true,
 }
 
 vi.mock('./ui/button', () => ({
@@ -72,10 +74,13 @@ describe('AI provider controls', () => {
           anthropic: false,
           xai: false,
           openrouter: false,
+          'opencode-zen': false,
+          'opencode-go': false,
         }}
         transportAvailability={availableTransports}
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
+        onVisionModelChange={() => undefined}
         onManageKeys={() => undefined}
         onConnectCodex={() => undefined}
       />,
@@ -100,10 +105,13 @@ describe('AI provider controls', () => {
           anthropic: true,
           xai: true,
           openrouter: true,
+          'opencode-zen': false,
+          'opencode-go': false,
         }}
         transportAvailability={availableTransports}
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
+        onVisionModelChange={() => undefined}
         onManageKeys={() => undefined}
         onConnectCodex={() => undefined}
       />,
@@ -135,10 +143,13 @@ describe('AI provider controls', () => {
           anthropic: false,
           xai: false,
           openrouter: false,
+          'opencode-zen': false,
+          'opencode-go': false,
         }}
         transportAvailability={availableTransports}
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
+        onVisionModelChange={() => undefined}
         onManageKeys={() => undefined}
         onConnectCodex={() => undefined}
       />,
@@ -168,10 +179,13 @@ describe('AI provider controls', () => {
           anthropic: false,
           xai: false,
           openrouter: false,
+          'opencode-zen': false,
+          'opencode-go': false,
         }}
         transportAvailability={availableTransports}
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
+        onVisionModelChange={() => undefined}
         onManageKeys={() => undefined}
         onConnectCodex={() => undefined}
       />,
@@ -202,10 +216,13 @@ describe('AI provider controls', () => {
           anthropic: false,
           xai: false,
           openrouter: false,
+          'opencode-zen': false,
+          'opencode-go': false,
         }}
         transportAvailability={availableTransports}
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
+        onVisionModelChange={() => undefined}
         onManageKeys={() => undefined}
         onConnectCodex={() => undefined}
       />,
@@ -238,10 +255,13 @@ describe('AI provider controls', () => {
           anthropic: false,
           xai: false,
           openrouter: true,
+          'opencode-zen': false,
+          'opencode-go': false,
         }}
         transportAvailability={availableTransports}
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
+        onVisionModelChange={() => undefined}
         onManageKeys={() => undefined}
         onConnectCodex={() => undefined}
       />,
@@ -265,10 +285,13 @@ describe('AI provider controls', () => {
           anthropic: false,
           xai: false,
           openrouter: false,
+          'opencode-zen': false,
+          'opencode-go': false,
         }}
         transportAvailability={{ ...availableTransports, moonshot: false }}
         onModelSelect={() => undefined}
         onReasoningEffortChange={() => undefined}
+        onVisionModelChange={() => undefined}
         onManageKeys={() => undefined}
         onConnectCodex={() => undefined}
       />,
@@ -277,5 +300,38 @@ describe('AI provider controls', () => {
     expect(markup).toContain('Local proxy unavailable.')
     expect(markup).toContain('Moonshot · local proxy unavailable')
     expect(markup).not.toContain('Enter API key')
+  })
+
+  it('offers a vision fallback picker for OpenCode models without native vision', () => {
+    const markup = renderToStaticMarkup(
+      <AiProviderControls
+        selection={{
+          provider: 'opencode-go',
+          model: 'opencode-go/glm-5.3',
+          reasoningEffort: 'high',
+        }}
+        availability={{
+          ...availableTransports,
+          moonshot: false,
+          google: false,
+          qwen: false,
+          openai: false,
+          anthropic: false,
+          xai: false,
+          openrouter: false,
+        }}
+        transportAvailability={availableTransports}
+        onModelSelect={() => undefined}
+        onReasoningEffortChange={() => undefined}
+        onVisionModelChange={() => undefined}
+        onManageKeys={() => undefined}
+        onConnectCodex={() => undefined}
+      />,
+    )
+
+    expect(markup).toContain('OpenCode Go · GLM 5.3')
+    expect(markup).toContain('Vision fallback')
+    expect(markup).toContain('cannot see images')
+    expect(markup).toContain('Other models…')
   })
 })

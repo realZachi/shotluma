@@ -5,7 +5,7 @@ import {
   type SyntheticEvent,
 } from 'react'
 import {
-  AI_PROVIDERS,
+  getAiProviderKeyFields,
   type AiProviderId,
 } from '../ai/provider-catalog'
 import {
@@ -51,9 +51,12 @@ export const AiApiKeysDialog = ({
     if (!open) return
     const frame = window.requestAnimationFrame(() => {
       const targetId = focusProviderId
-        ?? AI_PROVIDERS.find((provider) => provider.auth === 'apiKey')?.id
+        ?? getAiProviderKeyFields()[0]?.providerIds[0]
       if (!targetId) return
-      const node = document.getElementById(`${formId}-${targetId}`)
+      const field = getAiProviderKeyFields().find((entry) =>
+        entry.providerIds.includes(targetId),
+      )
+      const node = document.getElementById(`${formId}-${field?.id ?? targetId}`)
       if (!(node instanceof HTMLInputElement)) return
       node.focus()
       node.select()
@@ -102,18 +105,24 @@ export const AiApiKeysDialog = ({
             </summary>
             <p>
               Keys are stored unencrypted in this browser. AI requests send a key only
-              to the provider used for that request; Moonshot passes through the local proxy,
-              and optional overlay assets use OpenAI. Use dedicated keys with strict limits.
+              to the provider used for that request; Moonshot and OpenCode pass through
+              a same-origin CORS proxy, and optional overlay assets use OpenAI. Use
+              dedicated keys with strict limits.
             </p>
           </details>
 
           <div className="ai-keys-dialog-fields">
-            {AI_PROVIDERS.filter((provider) => provider.auth === 'apiKey').map((provider) => {
-              const inputId = `${formId}-${provider.id}`
-              const hasEnvFallback = envAvailability[provider.id] && !draft[provider.id]
+            {getAiProviderKeyFields().map((field) => {
+              const inputId = `${formId}-${field.id}`
+              const value = field.providerIds
+                .map((providerId) => draft[providerId])
+                .find((entry) => entry.length > 0) ?? ''
+              const hasEnvFallback = field.providerIds.some((providerId) =>
+                envAvailability[providerId] && !draft[providerId],
+              )
               return (
-                <label className="ai-keys-dialog-field" htmlFor={inputId} key={provider.id}>
-                  <span>{provider.label}</span>
+                <label className="ai-keys-dialog-field" htmlFor={inputId} key={field.id}>
+                  <span>{field.label}</span>
                   <Input
                     id={inputId}
                     type="password"
@@ -121,16 +130,22 @@ export const AiApiKeysDialog = ({
                     autoCapitalize="none"
                     spellCheck={false}
                     placeholder={hasEnvFallback ? 'Using .env.local' : 'Paste API key'}
-                    value={draft[provider.id]}
+                    value={value}
                     onKeyDown={(event) => {
                       if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
                       event.preventDefault()
                       saveDraft()
                     }}
                     onChange={(event) => {
-                      const value = event.target.value
+                      const nextValue = event.target.value
                       setSaveError(null)
-                      setDraft((current) => ({ ...current, [provider.id]: value }))
+                      setDraft((current) => {
+                        const next = { ...current }
+                        for (const providerId of field.providerIds) {
+                          next[providerId] = nextValue
+                        }
+                        return next
+                      })
                     }}
                   />
                 </label>

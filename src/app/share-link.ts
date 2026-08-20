@@ -11,7 +11,7 @@ import type { Background, CanvasElement, Slide, UploadAsset } from '../types'
  * exist:
  *
  * - `/s/<id>` (preferred): the payload is stored by the share API
- *   (`worker/share-worker.ts`, Cloudflare KV, 90-day retention) and the link
+ *   (`scripts/share-api.ts`, Cloudflare KV, 90-day retention) and the link
  *   stays short. The id lives in the path — not the fragment — so the Worker
  *   can serve per-share Open Graph tags to link-preview crawlers; the app
  *   itself consumes the id on boot and rewrites the URL back to `/`. A
