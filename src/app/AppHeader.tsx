@@ -7,6 +7,7 @@ import {
   Cloud,
   Copy,
   Download,
+  Link01,
   Plus,
   Redo2,
   Save,
@@ -46,6 +47,7 @@ type AppHeaderProps = {
   onOpenProject: (projectId: string) => void
   onCreateProject: () => void
   onDuplicateProject: () => void
+  onShareProject: () => void
   onSaveProject: () => void
   onRequestProjectDeletion: () => void
   onUndo: () => void
@@ -62,6 +64,7 @@ function ProjectMenu({
   onOpenProject,
   onCreateProject,
   onDuplicateProject,
+  onShareProject,
   onSaveProject,
   onRequestProjectDeletion,
 }: Pick<
@@ -71,6 +74,7 @@ function ProjectMenu({
   | 'onOpenProject'
   | 'onCreateProject'
   | 'onDuplicateProject'
+  | 'onShareProject'
   | 'onSaveProject'
   | 'onRequestProjectDeletion'
 > & { disabled: boolean }) {
@@ -114,6 +118,10 @@ function ProjectMenu({
           <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={onDuplicateProject}>
             <Copy size={15} />
             <span>Duplicate project</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={onShareProject}>
+            <Link01 size={15} />
+            <span>Share as link</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -208,6 +216,7 @@ export function AppHeader({
   onOpenProject,
   onCreateProject,
   onDuplicateProject,
+  onShareProject,
   onSaveProject,
   onRequestProjectDeletion,
   onUndo,
@@ -256,6 +265,7 @@ export function AppHeader({
                 onOpenProject={onOpenProject}
                 onCreateProject={onCreateProject}
                 onDuplicateProject={onDuplicateProject}
+                onShareProject={onShareProject}
                 onSaveProject={onSaveProject}
                 onRequestProjectDeletion={onRequestProjectDeletion}
               />

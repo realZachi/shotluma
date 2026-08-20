@@ -46,6 +46,7 @@ const headerProps = {
   onOpenProject: () => undefined,
   onCreateProject: () => undefined,
   onDuplicateProject: () => undefined,
+  onShareProject: () => undefined,
   onSaveProject: () => undefined,
   onRequestProjectDeletion: () => undefined,
   onUndo: () => undefined,
@@ -72,6 +73,18 @@ describe('App header', () => {
     )
     expect(markup).toContain('class="project-new-button"')
     expect(markup).not.toMatch(/aria-label="New project"[^>]*disabled/)
+  })
+
+  it('offers sharing the project as a link from the project menu', () => {
+    const markup = renderToStaticMarkup(
+      <AppHeader
+        {...headerProps}
+        saveStatus="saved"
+        persistenceReady
+      />,
+    )
+
+    expect(markup).toContain('Share as link')
   })
 
   it('disables the new-project button until persistence is ready', () => {

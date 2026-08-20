@@ -29,6 +29,15 @@ export default defineConfig(({ command, mode }) => {
         requestPath.replace(/^\/api\/opencode\/zen/, '/zen') || '/zen',
     },
   }
+  // Local dev has no share Worker, so short share links go through the
+  // deployed one; the client falls back to self-contained links on failure.
+  const devProxy = {
+    ...moonshotAndOpencodeProxy,
+    '/api/share': {
+      target: 'https://app.shotluma.com',
+      changeOrigin: true,
+    },
+  }
 
   return {
     define: {
@@ -52,10 +61,10 @@ export default defineConfig(({ command, mode }) => {
     server: {
       host: '127.0.0.1',
       port: Number(process.env['PORT']) || 4173,
-      proxy: moonshotAndOpencodeProxy,
+      proxy: devProxy,
     },
     preview: {
-      proxy: moonshotAndOpencodeProxy,
+      proxy: devProxy,
     },
   }
 })

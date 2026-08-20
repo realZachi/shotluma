@@ -1,20 +1,19 @@
 import { proxyOpencodeRequest, rewriteOpencodeProxyUrl } from './opencode-proxy'
+import { handleShareRequest, type ShareApiEnv } from './share-api'
 
-type AssetFetcher = {
-  fetch: (request: Request) => Promise<Response>
-}
-
-export type ShotlumaWorkerEnv = {
-  ASSETS: AssetFetcher
-}
+export type ShotlumaWorkerEnv = ShareApiEnv
 
 /**
- * Hosted same-origin CORS proxy for OpenCode Zen/Go. Browser keys stay on the
- * request; the worker only rewrites the URL so app.shotluma.com can call an
- * API that does not answer OPTIONS preflight.
+ * Single Worker entry for app.shotluma.com. It mounts the share API and
+ * share pages (`scripts/share-api.ts`) and the hosted same-origin CORS proxy
+ * for OpenCode Zen/Go — browser keys stay on the request; the worker only
+ * rewrites the URL so app.shotluma.com can call an API that does not answer
+ * OPTIONS preflight. Everything else is served from static assets.
  */
 export default {
   async fetch(request: Request, env: ShotlumaWorkerEnv): Promise<Response> {
+    const shareResponse = handleShareRequest(request, env)
+    if (shareResponse) return shareResponse
     if (rewriteOpencodeProxyUrl(new URL(request.url))) {
       return proxyOpencodeRequest(request)
     }

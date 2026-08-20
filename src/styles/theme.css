@@ -362,6 +362,133 @@ select:focus-visible {
   box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 45%, transparent);
 }
 
+.share-link-dialog {
+  width: min(calc(100vw - 32px), 380px);
+  max-width: 380px;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 48px oklch(0 0 0 / 18%), 0 2px 8px oklch(0 0 0 / 8%);
+}
+.share-link-dialog [data-slot='alert-dialog-header'] {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  place-items: start;
+  gap: 3px 12px;
+  padding: 18px 18px 14px;
+  text-align: left;
+}
+.share-link-dialog [data-slot='alert-dialog-media'] {
+  grid-row: 1 / span 2;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  color: var(--foreground);
+  background: var(--muted);
+  border-radius: var(--radius-md);
+}
+.share-link-dialog [data-slot='alert-dialog-title'] {
+  grid-column: 2;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 580;
+  line-height: 18px;
+  letter-spacing: 0;
+}
+.share-link-dialog [data-slot='alert-dialog-description'] {
+  grid-column: 2;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+  text-wrap: pretty;
+}
+.share-link-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 18px 16px;
+}
+.share-link-dialog-preview {
+  max-height: 44px;
+  padding: 8px 10px;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  background: color-mix(in oklch, var(--muted) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.4;
+  word-break: break-all;
+  user-select: none;
+}
+.share-link-dialog-status,
+.share-link-dialog-meta {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.share-link-dialog-error {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 10px;
+  font-weight: 540;
+  line-height: 1.4;
+}
+.share-link-dialog-fallback {
+  height: 28px;
+  padding: 0 10px;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 10px;
+}
+.share-link-dialog [data-slot='alert-dialog-footer'] {
+  margin: 0;
+  padding: 11px 14px 13px;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 7px;
+  background: var(--muted);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.share-link-dialog [data-slot='alert-dialog-cancel'],
+.share-link-dialog .share-link-dialog-copy {
+  min-width: 78px;
+  height: 29px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  font-weight: 520;
+  line-height: 1;
+}
+.share-link-dialog .share-link-dialog-close {
+  color: var(--foreground);
+  background: var(--background);
+  border-color: var(--input);
+}
+.share-link-dialog .share-link-dialog-close:hover { background: var(--accent); }
+.share-link-dialog .share-link-dialog-copy {
+  color: white;
+  background: var(--foreground);
+  border-color: var(--foreground);
+}
+.share-link-dialog .share-link-dialog-copy:hover:not(:disabled) {
+  color: white;
+  background: color-mix(in oklch, var(--foreground) 88%, black);
+}
+.share-link-dialog button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 45%, transparent);
+}
+
 .history-actions button:hover {
   background: var(--accent);
   color: var(--accent-foreground);
