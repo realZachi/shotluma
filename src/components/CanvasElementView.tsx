@@ -8,6 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { photoMockups, type PhotoMockupDefinition } from '../mockups/catalog'
+import { createPerspectiveMapping } from '../mockups/perspective'
 import { hexToRgba, richTextHasFormatting, richTextToPlain, sanitizeRichText } from '../utils'
 import { IconGraphic } from './IconGraphic'
 import { Bold, Home01, Italic, LockKeyhole, MoreHorizontal, Search01, Signal, Underline, UserCircle, Wifi01, BatteryFull, Add01 } from './icons'
@@ -35,82 +36,6 @@ const FakeScreen = ({ theme }: { theme: Extract<CanvasElement, { type: 'device' 
   </div>
 )
 
-const solveLinearSystem = (matrix: number[][], vector: number[]) => {
-  const size = vector.length
-  const augmented = matrix.map((row, index) => [...row, vector[index]])
-
-  for (let column = 0; column < size; column += 1) {
-    let pivot = column
-    for (let row = column + 1; row < size; row += 1) {
-      const candidate = augmented[row]?.[column] ?? 0
-      const currentPivot = augmented[pivot]?.[column] ?? 0
-      if (Math.abs(candidate) > Math.abs(currentPivot)) pivot = row
-    }
-    const columnRow = augmented[column]
-    const pivotRow = augmented[pivot]
-    if (!columnRow || !pivotRow) return null
-    augmented[column] = pivotRow
-    augmented[pivot] = columnRow
-    const activeRow = pivotRow
-    const divisor = activeRow[column]
-    if (divisor === undefined) return null
-    if (Math.abs(divisor) < 1e-10) return null
-    for (let item = column; item <= size; item += 1) {
-      activeRow[item] = (activeRow[item] ?? 0) / divisor
-    }
-    for (let row = 0; row < size; row += 1) {
-      if (row === column) continue
-      const targetRow = augmented[row]
-      if (!targetRow) return null
-      const factor = targetRow[column] ?? 0
-      for (let item = column; item <= size; item += 1) {
-        targetRow[item] = (targetRow[item] ?? 0) - factor * (activeRow[item] ?? 0)
-      }
-    }
-  }
-
-  return augmented.map((row) => row[size] ?? 0)
-}
-
-const perspectiveMatrix = (width: number, height: number, definition: PhotoMockupDefinition) => {
-  const sourceWidth = 139.2
-  const sourceHeight = sourceWidth / definition.sourceAspectRatio
-  const source: [number, number][] = [
-    [0, 0],
-    [sourceWidth, 0],
-    [sourceWidth, sourceHeight],
-    [0, sourceHeight],
-  ]
-  const target: [number, number][] = definition.screenQuad.map(
-    (point) => [point.x * width, point.y * height],
-  )
-  const equations: number[][] = []
-  const values: number[] = []
-
-  for (let index = 0; index < 4; index += 1) {
-    const sourcePoint = source[index]
-    const targetPoint = target[index]
-    if (!sourcePoint || !targetPoint) {
-      return { transform: 'none', sourceWidth, sourceHeight }
-    }
-    const [x, y] = sourcePoint
-    const [targetX, targetY] = targetPoint
-    equations.push([x, y, 1, 0, 0, 0, -targetX * x, -targetX * y])
-    values.push(targetX)
-    equations.push([0, 0, 0, x, y, 1, -targetY * x, -targetY * y])
-    values.push(targetY)
-  }
-
-  const solved = solveLinearSystem(equations, values)
-  if (!solved) return { transform: 'none', sourceWidth, sourceHeight }
-  const [a = 0, b = 0, c = 0, d = 0, e = 0, f = 0, g = 0, h = 0] = solved
-  return {
-    transform: `matrix3d(${a},${d},0,${g},${b},${e},0,${h},0,0,1,0,${c},${f},0,1)`,
-    sourceWidth,
-    sourceHeight,
-  }
-}
-
 const runRichTextCommand = (command: string, value?: string) => {
   // execCommand is the only browser API that preserves an arbitrary
   // contenteditable selection while applying inline formatting.
@@ -132,7 +57,12 @@ const PhotoMockup = ({ element, definition }: { element: Extract<CanvasElement, 
     return () => observer.disconnect()
   }, [])
 
-  const mapping = perspectiveMatrix(size.width, size.height, definition)
+  const mapping = createPerspectiveMapping({
+    width: size.width,
+    height: size.height,
+    definition,
+    hasScreenshot: Boolean(element.screenshot),
+  })
   const screenClip = definition.screenMask
     ? `inset(${definition.screenMask.top * mapping.sourceHeight}px ${definition.screenMask.right * mapping.sourceWidth}px ${definition.screenMask.bottom * mapping.sourceHeight}px ${definition.screenMask.left * mapping.sourceWidth}px round ${definition.screenMask.cornerRadius * mapping.sourceWidth}px)`
     : undefined

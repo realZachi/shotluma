@@ -27,6 +27,7 @@ export default defineConfig({
         'src/editor/nudge.ts',
         'src/editor/screen-span.ts',
         'src/editor/slide-operations.ts',
+        'src/mockups/perspective.ts',
       ],
       thresholds: {
         lines: 80,

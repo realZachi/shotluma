@@ -39,6 +39,8 @@ Example:
 
 Shotluma calculates a projective `matrix3d` from these points. Uploaded screenshots are therefore distorted into the original Photoshop perspective instead of merely being rotated.
 
+At runtime, real screenshots use a perspective source plane at least as wide as the rendered mockup. This matters for native-size HTML screens that are scaled down in the editor: it prevents the browser from enlarging a small intermediate texture before the outer scale is applied. Placeholder screens retain their fixed reference plane because their generated UI uses absolute CSS pixel sizes.
+
 ## What does not work
 
 A single flattened JPG is not enough: the original screen cannot be removed cleanly and there are no reliable perspective coordinates. A flattened transparent PNG can be used only when the display area is already empty and its four corners are supplied manually.
