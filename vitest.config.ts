@@ -19,6 +19,7 @@ export default defineConfig({
         'src/app/export-image-sizing.ts',
         'src/asset-sources.ts',
         'src/app/project-utils.ts',
+        'src/app/share-link.ts',
         'src/editor/drag-bounds.ts',
         'src/editor/element-utils.ts',
         'src/editor/nudge.ts',

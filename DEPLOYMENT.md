@@ -46,6 +46,14 @@ The Cloudflare custom domain is source-controlled in `wrangler.jsonc`. Do not
 attach this Worker to the apex domain, and do not add marketing-site source,
 styles, assets, or production-only configuration to this repository.
 
+The Worker also runs the share API (`worker/share-worker.ts`) for short
+project share links. It stores opaque share payloads in the `SHARE_KV` KV
+namespace referenced in `wrangler.jsonc`; the API token therefore needs
+Workers KV Storage edit permission (included in the standard Edit Cloudflare
+Workers token template). The editor falls back to self-contained share links
+when the API is unavailable, so a deployment without the KV binding degrades
+gracefully.
+
 Keep `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` available only to the
 `bun run deploy-only` command. The GitHub Actions workflow follows the same
 boundary: it builds without Cloudflare credentials and supplies them only to

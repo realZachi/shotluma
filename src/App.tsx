@@ -3,6 +3,7 @@ import { useAiWorkflow } from './ai/use-ai-workflow'
 import { AppHeader } from './app/AppHeader'
 import { loadInitialState } from './app/project-utils'
 import { ProjectDeleteDialog } from './app/ProjectDeleteDialog'
+import { ShareLinkDialog } from './app/ShareLinkDialog'
 import { useProjectWorkspace } from './app/use-project-workspace'
 import { useSlideExport } from './app/use-slide-export'
 import { APP_LOGO_URL } from './brand'
@@ -32,6 +33,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [zoom, setZoom] = useState(0.9)
   const [toast, setToast] = useState<string | null>(null)
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
 
   const selectedElementId = selectedElementIds.at(-1) ?? null
   const clearSelection = useCallback(() => setSelectedElementIds([]), [])
@@ -221,6 +223,7 @@ export default function App() {
         onOpenProject={project.openProject}
         onCreateProject={project.createNewProject}
         onDuplicateProject={project.duplicateCurrentProject}
+        onShareProject={() => setShareDialogOpen(true)}
         onSaveProject={() => void project.saveCurrentProject(true)}
         onRequestProjectDeletion={() => project.setDeleteDialogOpen(true)}
         onUndo={history.undo}
@@ -313,6 +316,13 @@ export default function App() {
           <button onClick={() => setToast(null)}><X size={14} /></button>
         </div>
       )}
+      <ShareLinkDialog
+        open={shareDialogOpen}
+        projectName={project.projectName}
+        slides={slides}
+        uploads={uploads}
+        onOpenChange={setShareDialogOpen}
+      />
       <ProjectDeleteDialog
         open={project.deleteDialogOpen}
         deleting={project.deletingProject}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { hydrateProjectAssets } from '../asset-store'
 import { createInitialSlides } from '../data'
 import {
   deleteProject,
@@ -12,6 +13,7 @@ import {
 } from '../persistence'
 import { uid } from '../utils'
 import { DEFAULT_PROJECT_NAME, getUniqueProjectName, upsertProjectSummary } from './project-utils'
+import { consumeShareLinkHash, decodeSharePayload } from './share-link'
 import type { Slide, UploadAsset } from '../types'
 import type { SaveStatus } from './project-types'
 
@@ -41,6 +43,45 @@ const makeNewProject = (
     createdAt: now,
     savedAt: now,
   }
+}
+
+type SharedImportResult =
+  | { status: 'none' }
+  | { status: 'invalid' }
+  | { status: 'imported'; project: PersistedProject }
+
+/**
+ * Imports a project carried by a `#share=` link as a new, independent local
+ * copy: inlined images become locally stored blobs on save, so later edits or
+ * deletion only ever touch this browser's copy.
+ */
+const importSharedProject = async (existingProjects: ProjectSummary[]): Promise<SharedImportResult> => {
+  const sharedHash = consumeShareLinkHash()
+  if (!sharedHash) return { status: 'none' }
+  try {
+    const shared = await decodeSharePayload(sharedHash)
+    if (!shared) return { status: 'invalid' }
+    const project = await hydrateProjectAssets(makeNewProject(
+      getUniqueProjectName(existingProjects, shared.projectName),
+      shared.slides,
+      shared.uploads,
+    ))
+    await saveProject(project)
+    return { status: 'imported', project }
+  } catch {
+    return { status: 'invalid' }
+  }
+}
+
+// React StrictMode double-invokes the hydration effect in development. The
+// first run consumes the one-shot URL fragment and may be cancelled mid-way,
+// so both runs must share a single import request — otherwise the shared
+// project is either lost or saved twice.
+let sharedImportRequest: Promise<SharedImportResult> | null = null
+
+const importSharedProjectOnce = (existingProjects: ProjectSummary[]): Promise<SharedImportResult> => {
+  sharedImportRequest ??= importSharedProject(existingProjects)
+  return sharedImportRequest
 }
 
 export function useProjectWorkspace({
@@ -108,19 +149,26 @@ export function useProjectWorkspace({
         const workspace = await loadProjectWorkspace()
         if (isCancelled()) return
 
-        const project = workspace.activeProject ?? makeNewProject(
+        const sharedImport = await importSharedProjectOnce(workspace.projects)
+        const imported = sharedImport.status === 'imported' ? sharedImport.project : null
+        const project = imported ?? workspace.activeProject ?? makeNewProject(
           projectNameRef.current,
           slidesRef.current,
           uploadsRef.current,
         )
-        if (!workspace.activeProject) await saveProject(project)
+        if (!imported && !workspace.activeProject) await saveProject(project)
         await setActiveProjectId(project.id)
         if (isCancelled()) return
 
         replaceProject(project)
-        setProjects(workspace.activeProject
-          ? workspace.projects
+        setProjects(imported || workspace.activeProject
+          ? upsertProjectSummary(workspace.projects, project)
           : upsertProjectSummary([], project))
+        if (sharedImport.status === 'imported') {
+          setToast('Shared project imported as your own local copy')
+        } else if (sharedImport.status === 'invalid') {
+          setToast('Couldn’t open the shared project link')
+        }
         removeLegacyProject()
         skipNextAutoSaveRef.current = true
         setSaveStatus('saved')
@@ -138,7 +186,7 @@ export function useProjectWorkspace({
     return () => {
       cancelled = true
     }
-  }, [replaceProject, slidesRef, uploadsRef])
+  }, [replaceProject, setToast, slidesRef, uploadsRef])
 
   const saveCurrentProject = useCallback(async (showConfirmation = false) => {
     if (!persistenceReadyRef.current || projectTransitionRef.current) return false

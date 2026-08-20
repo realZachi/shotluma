@@ -2,10 +2,19 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "shotluma-app",
   "compatibility_date": "2026-08-03",
+  "main": "worker/share-worker.ts",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/share", "/api/share/*", "/s/*"]
   },
+  "kv_namespaces": [
+    {
+      "binding": "SHARE_KV",
+      "id": "a5c85baed396460b8f79536f88692afc"
+    }
+  ],
   "routes": [
     {
       "pattern": "app.shotluma.com",

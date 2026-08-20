@@ -90,6 +90,41 @@ Persistence is browser-local:
 
 Avoid putting credentials or provider responses into persisted project data.
 
+### Share links
+
+`src/app/share-link.ts` implements project sharing. The share payload is the
+whole project as deflate-raw-compressed JSON with every image inlined as a
+data URL (images are additionally capped at export resolution and re-encoded
+as WebP when that is smaller). Two link forms exist:
+
+- `/s/<id>` (preferred): the payload is uploaded to the share API and only a
+  short id travels in the link. `worker/share-worker.ts` is the script of the
+  same `shotluma-app` Worker that serves the editor assets
+  (`assets.run_worker_first` routes only `/api/share*` and `/s/*` to it) and
+  stores payloads opaquely in the `SHARE_KV` KV namespace with a 90-day TTL
+  and a 10 MB cap. The id lives in the URL path because link-preview crawlers
+  never send fragments: `GET /s/<id>` serves the editor's index.html with
+  per-share Open Graph tags injected (project name plus a 1200 × 630 unfurl
+  image that `src/app/share-preview.ts` renders client-side from the live
+  artboards and uploads best-effort at share time). The app consumes the path
+  on boot and rewrites the URL back to `/`; `#s=<id>` links stay readable.
+  During local dev the Vite server proxies `/api/share` to the deployed
+  Worker.
+- `#share=<base64url payload>` (fallback): when the share API is unreachable
+  the link carries the payload itself, so sharing degrades gracefully instead
+  of failing; such links can get very long and the dialog says so.
+
+Opening either link imports the payload as a new, independent local project —
+inlined images become locally stored Blobs — so the recipient can edit or
+delete their copy without ever affecting the sender's project. This is the
+only place project data can leave the browser, and only when the user
+explicitly creates a share link. A share payload is untrusted input: decoding
+re-sanitizes AI screen markup and rich text, drops malformed slides, elements,
+and uploads, rejects unsafe image source schemes, and caps the decompressed
+size so a handcrafted link cannot act as a decompression bomb. The import path
+consumes the fragment exactly once and is cached module-wide because React
+StrictMode double-invokes the hydration effect in development.
+
 Developer AI run logging is enabled only when `SHOTLUMA_AI_LOGGING=true`. The browser sends a versioned, bounded record to the local Vite middleware, which validates it and writes one JSON file per run to the git-ignored `ai-logs/` directory in the repository. Records include normalized total and per-step token usage, per-step tool and preview counts, visible text and reasoning output, tool activity, and coarse request sizes. Shotluma does not add input prompt text, screenshot payloads or names, credentials, or raw provider metadata to the records.
 
 ## Export

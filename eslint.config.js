@@ -6,7 +6,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
-const sourceFiles = ['src/**/*.{ts,tsx}', 'scripts/**/*.ts', '*.config.ts']
+const sourceFiles = ['src/**/*.{ts,tsx}', 'scripts/**/*.ts', 'worker/**/*.ts', '*.config.ts']
 const generatedUiFiles = ['src/components/ui/**/*.{ts,tsx}']
 
 const styleConfig = stylistic.configs.customize({
