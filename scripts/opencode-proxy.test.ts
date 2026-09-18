@@ -50,6 +50,7 @@ describe('OpenCode CORS proxy headers and methods', () => {
       authorization: 'Bearer test-key',
       'content-type': 'application/json',
       accept: 'text/event-stream',
+      'x-opencode-session': 'shotluma-test-session',
       cookie: 'session=secret',
       host: 'app.shotluma.com',
     }))
@@ -57,6 +58,7 @@ describe('OpenCode CORS proxy headers and methods', () => {
       authorization: 'Bearer test-key',
       'content-type': 'application/json',
       accept: 'text/event-stream',
+      'x-opencode-session': 'shotluma-test-session',
     })
   })
 
