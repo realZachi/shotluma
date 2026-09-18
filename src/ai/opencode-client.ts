@@ -4,16 +4,47 @@ import { OPENCODE_VISION_PROMPT, toVisionFilePart } from './describe-images'
 import { opencodeModelDialect } from './opencode-dialects'
 import type { OpencodeProviderId } from './opencode-models'
 
+export const OPENCODE_SESSION_STORAGE_KEY = 'shotluma-opencode-session'
+
+type SessionIdStorage = Pick<Storage, 'getItem' | 'setItem'>
+
+const getSessionStorage = (): SessionIdStorage | null => {
+  try {
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage
+  } catch {
+    return null
+  }
+}
+
 /**
  * OpenCode Go and Zen expect a stable session id on every request so the
  * gateway can route traffic and reuse prompt caches:
  * https://opencode.ai/docs/go/#where-can-i-use-it
  *
- * Module scope keeps it stable for the browser session while naturally
- * sharding traffic across clients, matching the lifecycle of
- * PROMPT_CACHE_SESSION_ID in runner.ts.
+ * sessionStorage keeps the id stable across full page reloads in one browser
+ * tab while naturally sharding traffic across clients. Storage that is
+ * unavailable or throws degrades to an id that only survives the page load.
  */
-export const OPENCODE_SESSION_ID = uid('shotluma')
+export const readOpencodeSessionId = (
+  storage: SessionIdStorage | null = getSessionStorage(),
+): string => {
+  if (!storage) return uid('shotluma')
+  try {
+    const stored = storage.getItem(OPENCODE_SESSION_STORAGE_KEY)
+    if (stored) return stored
+  } catch {
+    return uid('shotluma')
+  }
+  const generated = uid('shotluma')
+  try {
+    storage.setItem(OPENCODE_SESSION_STORAGE_KEY, generated)
+  } catch {
+    // The id still serves this page load; only persistence is unavailable.
+  }
+  return generated
+}
+
+export const OPENCODE_SESSION_ID = readOpencodeSessionId()
 
 /** Identifies Shotluma traffic to the OpenCode gateways on every request. */
 export const opencodeRequestHeaders = (): Record<string, string> => ({
