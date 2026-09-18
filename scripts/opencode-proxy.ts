@@ -9,13 +9,15 @@ const ZEN_PREFIX = '/api/opencode/zen'
  * the auth and versioning headers of all of them: `authorization` for the
  * OpenAI Responses and Chat Completions endpoints, `x-api-key` plus the
  * `anthropic-*` headers for `/v1/messages`, and `x-goog-api-key` for the Gemini
- * endpoint. Anything outside this list (cookies, origin, client hints) is
- * dropped so the proxy stays a pure credential passthrough.
+ * endpoint. `x-opencode-session` carries the client session id OpenCode uses
+ * for routing and prompt caching. Anything outside this list (cookies, origin,
+ * client hints) is dropped so the proxy stays a pure credential passthrough.
  */
 export const OPENCODE_FORWARDED_HEADERS = [
   'authorization',
   'content-type',
   'accept',
+  'x-opencode-session',
   'x-api-key',
   'anthropic-version',
   'anthropic-beta',
