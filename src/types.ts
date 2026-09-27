@@ -52,6 +52,7 @@ export type TextElement = BaseElement & {
   strokeWidth?: number
   shadow?: number
   shadowColor?: string
+  translations?: Record<string, { text: string; html?: string }>
 }
 
 export type DeviceElement = BaseElement & {
@@ -64,6 +65,9 @@ export type DeviceElement = BaseElement & {
     | 'iphone-17-e'
     | 'iphone-17-f'
     | 'tilted-hand'
+    | 'ipad-pro-portrait'
+    | 'ipad-pro-landscape'
+    | 'android-phone'
   screenshot?: string
   screenTheme: 'coral' | 'mint' | 'night' | 'sun'
   tiltX: number
@@ -71,6 +75,10 @@ export type DeviceElement = BaseElement & {
   shadow: number
   /** Render a continuation of this mockup on adjacent screens so it straddles the boundary. */
   spansScreens?: boolean
+  cleanStatusBar?: boolean
+  statusBarTheme?: 'dark' | 'light'
+  statusBarTime?: string
+  showDynamicIsland?: boolean
 }
 
 export type ImageElement = BaseElement & {
@@ -138,6 +146,6 @@ export type UploadAsset = {
   src: string
 }
 
-export type TemplateId = 'ink' | 'paper' | 'lime' | 'coral'
+export type TemplateId = 'ink' | 'paper' | 'lime' | 'coral' | 'slate' | 'cyber' | 'split-tablet' | 'panoramic-duo'
 
 export type TextPreset = 'title' | 'subtitle' | 'body' | 'label' | 'quote' | 'stat'

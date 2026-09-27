@@ -8,9 +8,12 @@ import {
   Copy,
   Download,
   Link01,
+  MonitorSmartphone,
   Plus,
   Redo2,
   Save,
+  SmartPhone01,
+  Tablet01,
   Trash2,
   Undo2,
 } from '../components/icons'
@@ -25,13 +28,18 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu'
-import { EXPORT_FORMATS, type ExportTarget } from './export-formats'
+import { EXPORT_FORMATS, getScreenFormat, type ExportTarget } from './export-formats'
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES, getLocaleDefinition } from './locale-types'
 import { saveStatusLabels, type SaveStatus } from './project-types'
 import { formatProjectTime } from './project-utils'
 import type { ProjectSummary } from '../persistence'
 
 type AppHeaderProps = {
   projectName: string
+  canvasFormatId: string
+  onSelectCanvasFormat: (formatId: string) => void
+  activeLocale?: string
+  onSelectLocale?: (locale: string) => void
   saveStatus: SaveStatus
   lastSavedAt: number | null
   projects: ProjectSummary[]
@@ -55,6 +63,7 @@ type AppHeaderProps = {
   onUndo: () => void
   onRedo: () => void
   onOpenAi: () => void
+  onOpenStorePreview?: () => void
   onExport: (target: ExportTarget) => void
   children?: React.ReactNode
 }
@@ -148,12 +157,181 @@ function ProjectMenu({
   )
 }
 
+function ScreenFormatMenu({
+  canvasFormatId,
+  onSelectCanvasFormat,
+}: {
+  canvasFormatId: string
+  onSelectCanvasFormat: (formatId: string) => void
+}) {
+  const current = getScreenFormat(canvasFormatId)
+  const isTablet = current.category === 'ipad' || current.id.includes('tablet')
+  const Icon = isTablet ? Tablet01 : SmartPhone01
+
+  const iphones = EXPORT_FORMATS.filter((f) => f.category === 'iphone')
+  const ipads = EXPORT_FORMATS.filter((f) => f.category === 'ipad')
+  const androids = EXPORT_FORMATS.filter((f) => f.category === 'android')
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="screen-format-control"
+        aria-label={`Current screen format: ${current.label}. Click to change.`}
+      >
+        <Icon size={14} />
+        <span>{current.shortLabel}</span>
+        <ChevronDown className="screen-format-chevron" size={12} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center" sideOffset={18} className="screen-format-menu-content">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="project-menu-label">
+            <strong>iPhone displays</strong>
+            <span>Apple App Store</span>
+          </DropdownMenuLabel>
+          {iphones.map((format) => {
+            const isSelected = format.id === current.id
+            return (
+              <DropdownMenuItem
+                key={format.id}
+                className="screen-format-item"
+                data-active={isSelected}
+                onClick={() => onSelectCanvasFormat(format.id)}
+              >
+                <span className="screen-format-item-check">
+                  {isSelected && <Check size={14} />}
+                </span>
+                <span className="screen-format-item-copy">
+                  <strong>{format.label}</strong>
+                  <small>{format.width} × {format.height} px</small>
+                </span>
+                <span className="screen-format-badge">iOS</span>
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="project-menu-label">
+            <strong>iPad displays</strong>
+            <span>Pro & Air (Portrait & Landscape)</span>
+          </DropdownMenuLabel>
+          {ipads.map((format) => {
+            const isSelected = format.id === current.id
+            return (
+              <DropdownMenuItem
+                key={format.id}
+                className="screen-format-item"
+                data-active={isSelected}
+                onClick={() => onSelectCanvasFormat(format.id)}
+              >
+                <span className="screen-format-item-check">
+                  {isSelected && <Check size={14} />}
+                </span>
+                <span className="screen-format-item-copy">
+                  <strong>{format.label}</strong>
+                  <small>{format.width} × {format.height} px · {format.orientation}</small>
+                </span>
+                <span className="screen-format-badge">iPadOS</span>
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="project-menu-label">
+            <strong>Android Phone & Tablets</strong>
+            <span>Google Play Store</span>
+          </DropdownMenuLabel>
+          {androids.map((format) => {
+            const isSelected = format.id === current.id
+            return (
+              <DropdownMenuItem
+                key={format.id}
+                className="screen-format-item"
+                data-active={isSelected}
+                onClick={() => onSelectCanvasFormat(format.id)}
+              >
+                <span className="screen-format-item-check">
+                  {isSelected && <Check size={14} />}
+                </span>
+                <span className="screen-format-item-copy">
+                  <strong>{format.label}</strong>
+                  <small>{format.width} × {format.height} px · {format.orientation}</small>
+                </span>
+                <span className="screen-format-badge">Play Store</span>
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function LocaleMenu({
+  activeLocale = DEFAULT_LOCALE,
+  onSelectLocale,
+}: {
+  activeLocale?: string | undefined
+  onSelectLocale?: ((locale: string) => void) | undefined
+}) {
+  const current = getLocaleDefinition(activeLocale)
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="screen-format-trigger"
+        aria-label="Select active language"
+        title="Active language for screenshot text"
+      >
+        <span style={{ fontSize: '13px' }}>{current.flag}</span>
+        <strong>{current.code}</strong>
+        <ChevronDown size={13} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" sideOffset={14} className="screen-format-menu-content w-64 max-h-[420px] overflow-y-auto">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="project-menu-label">
+            <strong>Active Language</strong>
+            <span>Translate text per country / region</span>
+          </DropdownMenuLabel>
+          {SUPPORTED_LOCALES.map((locale) => {
+            const isSelected = locale.code === current.code
+            return (
+              <DropdownMenuItem
+                key={locale.code}
+                className="screen-format-item"
+                data-active={isSelected}
+                onClick={() => onSelectLocale?.(locale.code)}
+              >
+                <span className="screen-format-item-check">
+                  {isSelected && <Check size={14} />}
+                </span>
+                <span style={{ fontSize: '14px', marginRight: '6px' }}>{locale.flag}</span>
+                <span className="screen-format-item-copy">
+                  <strong>{locale.label}</strong>
+                  <small>{locale.nativeLabel} · {locale.code}</small>
+                </span>
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function ExportMenu({
+  canvasFormatId,
   exporting,
   exportProgress,
   exportDisabled,
   onExport,
-}: Pick<AppHeaderProps, 'exporting' | 'exportProgress' | 'exportDisabled' | 'onExport'>) {
+}: Pick<AppHeaderProps, 'canvasFormatId' | 'exporting' | 'exportProgress' | 'exportDisabled' | 'onExport'>) {
+  const currentFormat = getScreenFormat(canvasFormatId)
+  const iphones = EXPORT_FORMATS.filter((f) => f.category === 'iphone')
+  const ipads = EXPORT_FORMATS.filter((f) => f.category === 'ipad')
+  const androids = EXPORT_FORMATS.filter((f) => f.category === 'android')
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -165,12 +343,23 @@ function ExportMenu({
           ? <><span className="export-spinner" /><b>{exportProgress}%</b></>
           : <><Download size={17} /><b>Export</b><ChevronDown className="export-button-chevron" size={13} /></>}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={6} className="export-menu-content w-64">
+      <DropdownMenuContent align="end" sideOffset={6} className="export-menu-content w-72 max-h-[500px] overflow-y-auto">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="export-menu-label">
-            <strong>Export all screens</strong>
-            <span>Choose App Store format</span>
+            <strong>Quick export</strong>
+            <span>Active project screen size</span>
           </DropdownMenuLabel>
+          <DropdownMenuItem
+            className="export-menu-item"
+            onClick={() => onExport(currentFormat)}
+          >
+            <span className="export-menu-size">{currentFormat.shortLabel}</span>
+            <span className="export-menu-copy">
+              <strong>{currentFormat.label}</strong>
+              <small>{currentFormat.width} × {currentFormat.height} px (Current)</small>
+            </span>
+            <Download size={15} />
+          </DropdownMenuItem>
           <DropdownMenuItem
             className="export-menu-item"
             onClick={() => onExport('all')}
@@ -182,8 +371,14 @@ function ExportMenu({
             </span>
             <Download size={15} />
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {EXPORT_FORMATS.map((format) => (
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="export-menu-label">
+            <strong>iPhone</strong>
+            <span>Apple App Store</span>
+          </DropdownMenuLabel>
+          {iphones.map((format) => (
             <DropdownMenuItem
               key={format.id}
               className="export-menu-item"
@@ -198,6 +393,48 @@ function ExportMenu({
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="export-menu-label">
+            <strong>iPad</strong>
+            <span>Apple App Store</span>
+          </DropdownMenuLabel>
+          {ipads.map((format) => (
+            <DropdownMenuItem
+              key={format.id}
+              className="export-menu-item"
+              onClick={() => onExport(format)}
+            >
+              <span className="export-menu-size">{format.shortLabel}</span>
+              <span className="export-menu-copy">
+                <strong>{format.label}</strong>
+                <small>{format.width} × {format.height} px · {format.orientation}</small>
+              </span>
+              <Download size={15} />
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="export-menu-label">
+            <strong>Android</strong>
+            <span>Google Play Store</span>
+          </DropdownMenuLabel>
+          {androids.map((format) => (
+            <DropdownMenuItem
+              key={format.id}
+              className="export-menu-item"
+              onClick={() => onExport(format)}
+            >
+              <span className="export-menu-size">{format.shortLabel}</span>
+              <span className="export-menu-copy">
+                <strong>{format.label}</strong>
+                <small>{format.width} × {format.height} px · {format.orientation}</small>
+              </span>
+              <Download size={15} />
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -205,6 +442,10 @@ function ExportMenu({
 
 export function AppHeader({
   projectName,
+  canvasFormatId,
+  onSelectCanvasFormat,
+  activeLocale,
+  onSelectLocale,
   saveStatus,
   lastSavedAt,
   projects,
@@ -227,6 +468,7 @@ export function AppHeader({
   onUndo,
   onRedo,
   onOpenAi,
+  onOpenStorePreview,
   onExport,
   children,
 }: AppHeaderProps) {
@@ -289,6 +531,14 @@ export function AppHeader({
               <Plus size={13} />
             </Button>
           </div>
+          <ScreenFormatMenu
+            canvasFormatId={canvasFormatId}
+            onSelectCanvasFormat={onSelectCanvasFormat}
+          />
+          <LocaleMenu
+            activeLocale={activeLocale}
+            onSelectLocale={onSelectLocale}
+          />
         </div>
         <div className="topbar-actions">
           <div className="history-actions">
@@ -299,6 +549,18 @@ export function AppHeader({
               <Redo2 size={17} />
             </button>
           </div>
+          {onOpenStorePreview && (
+            <Button
+              variant="outline"
+              size="default"
+              onClick={onOpenStorePreview}
+              title="Preview in App Store & Google Play"
+              aria-label="Preview in App Store & Google Play"
+            >
+              <MonitorSmartphone size={14} />
+              <span>Store Preview</span>
+            </Button>
+          )}
           <Button
             className="ai-generate-button"
             variant="secondary"
@@ -310,6 +572,7 @@ export function AppHeader({
             <span>Generate with AI</span>
           </Button>
           <ExportMenu
+            canvasFormatId={canvasFormatId}
             exporting={exporting}
             exportProgress={exportProgress}
             exportDisabled={exportDisabled}

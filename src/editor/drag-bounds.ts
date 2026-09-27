@@ -19,8 +19,8 @@ export const getDragMinX = (element: CanvasElement) => {
 export const getDragMaxX = (element: CanvasElement) =>
   isSpanningDevice(element) ? DRAG_MAX + SPAN_NEIGHBOR_OFFSET : DRAG_MAX
 
-export const getDragMinY = (element: CanvasElement) => {
+export const getDragMinY = (element: CanvasElement, artboardAspectRatio: number = ARTBOARD_ASPECT_RATIO) => {
   if (element.type !== 'device') return DEFAULT_DRAG_MIN
-  const height = element.width * ARTBOARD_ASPECT_RATIO / photoMockups[element.deviceStyle].canvasAspectRatio
+  const height = element.width * artboardAspectRatio / photoMockups[element.deviceStyle].canvasAspectRatio
   return Math.min(DEFAULT_DRAG_MIN, DEVICE_VISIBLE_EDGE - height)
 }

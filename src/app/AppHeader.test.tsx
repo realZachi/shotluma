@@ -28,6 +28,8 @@ vi.mock('../components/ui/button', () => ({
 
 const headerProps = {
   projectName: 'Launch screens',
+  canvasFormatId: 'iphone-6.9',
+  onSelectCanvasFormat: () => undefined,
   lastSavedAt: 1_700_000_000_000,
   projects: [{
     id: 'project-1',
@@ -118,5 +120,33 @@ describe('App header', () => {
 
     expect(markup).toContain('Delete waits for the AI run')
     expect(markup).not.toContain('Delete current project')
+  })
+
+  it('renders the active screen format control', () => {
+    const markup = renderToStaticMarkup(
+      <AppHeader
+        {...headerProps}
+        canvasFormatId="ipad-13"
+        saveStatus="saved"
+        persistenceReady
+      />,
+    )
+
+    expect(markup).toContain('13″ iPad Portrait')
+  })
+
+  it('renders the active language control and store preview button', () => {
+    const markup = renderToStaticMarkup(
+      <AppHeader
+        {...headerProps}
+        activeLocale="ja-JP"
+        onOpenStorePreview={() => undefined}
+        saveStatus="saved"
+        persistenceReady
+      />,
+    )
+
+    expect(markup).toContain('ja-JP')
+    expect(markup).toContain('Store Preview')
   })
 })

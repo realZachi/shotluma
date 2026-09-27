@@ -15,6 +15,7 @@ export type PersistedProject = {
   projectName: string
   slides: Slide[]
   uploads: UploadAsset[]
+  canvasFormatId?: string
   createdAt: number
   savedAt: number
   /**
@@ -25,7 +26,10 @@ export type PersistedProject = {
   interruptedGeneration?: true
 }
 
-export type ProjectSummary = Pick<PersistedProject, 'id' | 'projectName' | 'createdAt' | 'savedAt'>
+export type ProjectSummary = Pick<
+  PersistedProject,
+  'id' | 'projectName' | 'createdAt' | 'savedAt' | 'canvasFormatId'
+>
 
 type SettingRecord = { key: string; value: string }
 
@@ -45,6 +49,7 @@ export const normalizePersistedProject = (value: unknown): PersistedProject | nu
     projectName: project.projectName,
     slides: project.slides,
     uploads: project.uploads,
+    ...(typeof project.canvasFormatId === 'string' ? { canvasFormatId: project.canvasFormatId } : {}),
     createdAt: typeof project.createdAt === 'number' ? project.createdAt : project.savedAt,
     savedAt: project.savedAt,
     ...(project.interruptedGeneration === true ? { interruptedGeneration: true as const } : {}),
@@ -54,6 +59,7 @@ export const normalizePersistedProject = (value: unknown): PersistedProject | nu
 const summarizeProject = (project: PersistedProject): ProjectSummary => ({
   id: project.id,
   projectName: project.projectName,
+  ...(project.canvasFormatId ? { canvasFormatId: project.canvasFormatId } : {}),
   createdAt: project.createdAt,
   savedAt: project.savedAt,
 })

@@ -52,6 +52,15 @@ export default defineConfig(({ command, mode }) => {
         isEnabled: isAiLoggingEnabled,
         projectRoot: path.resolve(__dirname),
       }),
+      {
+        name: 'handle-watcher-errors',
+        configureServer(server) {
+          server.watcher.on('error', (error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error)
+            console.warn(`[vite:watcher] ${message}`)
+          })
+        },
+      },
     ],
     resolve: {
       alias: {

@@ -7,11 +7,13 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import { resolveElementText } from '../editor/element-utils'
 import { photoMockups, type PhotoMockupDefinition } from '../mockups/catalog'
 import { createPerspectiveMapping } from '../mockups/perspective'
 import { hexToRgba, richTextHasFormatting, richTextToPlain, sanitizeRichText } from '../utils'
+import { CleanStatusBarOverlay } from './CleanStatusBarOverlay'
 import { IconGraphic } from './IconGraphic'
-import { Bold, Home01, Italic, LockKeyhole, MoreHorizontal, Search01, Signal, Underline, UserCircle, Wifi01, BatteryFull, Add01 } from './icons'
+import { Bold, Home01, Italic, LockKeyhole, MoreHorizontal, Search01, Signal, Strikethrough, Underline, UserCircle, Wifi01, BatteryFull, Add01 } from './icons'
 import { ShapeGraphic } from './ShapeGraphic'
 import type { CanvasElement } from '../types'
 
@@ -77,6 +79,15 @@ const PhotoMockup = ({ element, definition }: { element: Extract<CanvasElement, 
           {element.screenshot
             ? <img src={element.screenshot} alt="Inserted app screenshot" draggable={false} />
             : <FakeScreen theme={element.screenTheme} />}
+          {element.cleanStatusBar && (
+            <CleanStatusBarOverlay
+              time={element.statusBarTime}
+              theme={element.statusBarTheme}
+              showDynamicIsland={element.showDynamicIsland}
+              sourceWidth={mapping.sourceWidth}
+              isAndroid={element.deviceStyle === 'android-phone'}
+            />
+          )}
         </div>
       )}
       <img className="photo-mockup-overlay" src={definition.overlay} alt="Photorealistic iPhone mockup" draggable={false} />
@@ -115,16 +126,25 @@ const getTextElementStyle = (element: Extract<CanvasElement, { type: 'text' }>):
 
 const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-const textToSeedHtml = (element: Extract<CanvasElement, { type: 'text' }>) =>
-  element.html ?? escapeHtml(element.text).replace(/\n/g, '<br>')
+const textToSeedHtml = (element: Extract<CanvasElement, { type: 'text' }>, locale?: string) => {
+  const resolved = resolveElementText(element, locale)
+  return resolved.html ?? escapeHtml(resolved.text).replace(/\n/g, '<br>')
+}
 
-export const ElementContent = ({ element }: { element: CanvasElement }) => {
+export const ElementContent = ({
+  element,
+  locale,
+}: {
+  element: CanvasElement
+  locale?: string | undefined
+}) => {
   if (element.type === 'text') {
     const style = getTextElementStyle(element)
-    if (element.html) {
-      return <div className="canvas-text" style={style} dangerouslySetInnerHTML={{ __html: element.html }} />
+    const resolved = resolveElementText(element, locale)
+    if (resolved.html) {
+      return <div className="canvas-text" style={style} dangerouslySetInnerHTML={{ __html: resolved.html }} />
     }
-    return <div className="canvas-text" style={style}>{element.text}</div>
+    return <div className="canvas-text" style={style}>{resolved.text}</div>
   }
 
   if (element.type === 'device') return <DeviceMockup element={element} />
@@ -176,14 +196,26 @@ type CanvasItemProps = {
   selected: boolean
   showTransformHandles: boolean
   exporting: boolean
+  locale?: string | undefined
   onSelect: (additive: boolean) => void
   onBeginDrag: (event: ReactPointerEvent, element: CanvasElement) => void
   onBeginResize: (event: ReactPointerEvent, element: CanvasElement) => void
   onBeginRotate: (event: ReactPointerEvent, element: CanvasElement) => void
-  onCommitText: (patch: { text: string; html?: string }) => void
+  onCommitText: (patch: { text: string; html?: string; translations?: Record<string, { text: string; html?: string }> }) => void
 }
 
-export const CanvasItem = ({ element, selected, showTransformHandles, exporting, onSelect, onBeginDrag, onBeginResize, onBeginRotate, onCommitText }: CanvasItemProps) => {
+export const CanvasItem = ({
+  element,
+  selected,
+  showTransformHandles,
+  exporting,
+  locale,
+  onSelect,
+  onBeginDrag,
+  onBeginResize,
+  onBeginRotate,
+  onCommitText,
+}: CanvasItemProps) => {
   const [editing, setEditing] = useState(false)
   const editableRef = useRef<HTMLDivElement>(null)
   const committedRef = useRef(false)
@@ -193,7 +225,7 @@ export const CanvasItem = ({ element, selected, showTransformHandles, exporting,
     if (!editing || element.type !== 'text') return
     const node = editableRef.current
     if (!node) return
-    node.innerHTML = textToSeedHtml(element)
+    node.innerHTML = textToSeedHtml(element, locale)
     committedRef.current = false
     node.focus()
     const selection = document.getSelection()
@@ -216,10 +248,24 @@ export const CanvasItem = ({ element, selected, showTransformHandles, exporting,
     const sanitized = sanitizeRichText(node.innerHTML)
     const plain = richTextToPlain(sanitized)
     if (plain.trim().length === 0) return
-    onCommitText({
-      text: plain,
-      ...(richTextHasFormatting(sanitized) ? { html: sanitized } : {}),
-    })
+    const formattedHtml = richTextHasFormatting(sanitized) ? sanitized : undefined
+
+    if (locale && locale !== 'en-US' && element.type === 'text') {
+      const existingTranslations = element.translations ?? {}
+      onCommitText({
+        text: element.text,
+        ...(element.html ? { html: element.html } : {}),
+        translations: {
+          ...existingTranslations,
+          [locale]: { text: plain, ...(formattedHtml ? { html: formattedHtml } : {}) },
+        },
+      })
+    } else {
+      onCommitText({
+        text: plain,
+        ...(formattedHtml ? { html: formattedHtml } : {}),
+      })
+    }
   }
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -281,7 +327,7 @@ export const CanvasItem = ({ element, selected, showTransformHandles, exporting,
             />
           )
         : (
-            <ElementContent element={element} />
+            <ElementContent element={element} locale={locale} />
           )}
       {editing && element.type === 'text' && !exporting && (
         <div className="text-edit-toolbar" role="toolbar" aria-label="Text formatting" onPointerDown={(event) => event.stopPropagation()}>
@@ -341,6 +387,20 @@ export const CanvasItem = ({ element, selected, showTransformHandles, exporting,
             title="Underline"
           >
             <Underline size={13} />
+          </button>
+          <button
+            onPointerDown={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+            onClick={(event) => {
+              event.stopPropagation()
+              runRichTextCommand('styleWithCSS', 'false')
+              runRichTextCommand('strikeThrough')
+            }}
+            title="Strikethrough"
+          >
+            <Strikethrough size={13} />
           </button>
         </div>
       )}

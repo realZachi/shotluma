@@ -12,6 +12,7 @@ import {
   type ProjectSummary,
 } from '../persistence'
 import { uid } from '../utils'
+import { DEFAULT_CANVAS_FORMAT_ID } from './export-formats'
 import {
   consumeInterruptedGeneration,
   DEFAULT_PROJECT_NAME,
@@ -48,6 +49,7 @@ const makeNewProject = (
   projectName: string,
   slides: Slide[],
   uploads: UploadAsset[],
+  canvasFormatId: string = DEFAULT_CANVAS_FORMAT_ID,
 ): PersistedProject => {
   const now = Date.now()
   return {
@@ -55,6 +57,7 @@ const makeNewProject = (
     projectName,
     slides,
     uploads,
+    canvasFormatId,
     createdAt: now,
     savedAt: now,
   }
@@ -81,6 +84,7 @@ const importSharedProject = async (existingProjects: ProjectSummary[]): Promise<
       getUniqueProjectName(existingProjects, shared.projectName),
       shared.slides,
       shared.uploads,
+      shared.canvasFormatId ?? DEFAULT_CANVAS_FORMAT_ID,
     ))
     await saveProject(project)
     return { status: 'imported', project }
@@ -125,6 +129,8 @@ export function useProjectWorkspace({
 }: ProjectWorkspaceOptions) {
   const [projectName, setProjectNameState] = useState(initialProjectName)
   const projectNameRef = useRef(initialProjectName)
+  const [canvasFormatId, setCanvasFormatIdState] = useState(DEFAULT_CANVAS_FORMAT_ID)
+  const canvasFormatIdRef = useRef(DEFAULT_CANVAS_FORMAT_ID)
   const [currentProjectId, setCurrentProjectId] = useState('current')
   const currentProjectIdRef = useRef('current')
   const currentProjectCreatedAtRef = useRef(0)
@@ -154,14 +160,22 @@ export function useProjectWorkspace({
     setProjectNameState(name)
   }, [])
 
+  const setCanvasFormatId = useCallback((formatId: string) => {
+    canvasFormatIdRef.current = formatId
+    setCanvasFormatIdState(formatId)
+  }, [])
+
   const replaceProject = useCallback((project: PersistedProject) => {
     currentProjectIdRef.current = project.id
     currentProjectCreatedAtRef.current = project.createdAt
     projectNameRef.current = project.projectName
+    const formatId = project.canvasFormatId ?? DEFAULT_CANVAS_FORMAT_ID
+    canvasFormatIdRef.current = formatId
     slidesRef.current = project.slides
     uploadsRef.current = project.uploads
     setCurrentProjectId(project.id)
     setProjectNameState(project.projectName)
+    setCanvasFormatIdState(formatId)
     setSlides(project.slides)
     setUploads(project.uploads)
     setLastSavedAt(project.savedAt)
@@ -243,6 +257,7 @@ export function useProjectWorkspace({
       projectName: projectNameRef.current.trim() || DEFAULT_PROJECT_NAME,
       slides: slidesRef.current,
       uploads: uploadsRef.current,
+      canvasFormatId: canvasFormatIdRef.current,
       createdAt: currentProjectCreatedAtRef.current,
       savedAt,
       ...(isAiRunActive() ? { interruptedGeneration: true as const } : {}),
@@ -346,6 +361,7 @@ export function useProjectWorkspace({
       ),
       structuredClone(slidesRef.current),
       structuredClone(uploadsRef.current),
+      canvasFormatIdRef.current,
     )
     void runProjectTransition(async () => {
       await saveProject(project)
@@ -395,7 +411,7 @@ export function useProjectWorkspace({
       void saveCurrentProject()
     }, 350)
     return () => window.clearTimeout(timer)
-  }, [persistenceReady, projectName, saveCurrentProject, slides, uploads])
+  }, [canvasFormatId, persistenceReady, projectName, saveCurrentProject, slides, uploads])
 
   useEffect(() => {
     const handleSaveShortcut = (event: KeyboardEvent) => {
@@ -421,6 +437,8 @@ export function useProjectWorkspace({
   return {
     projectName,
     setProjectName,
+    canvasFormatId,
+    setCanvasFormatId,
     currentProjectId,
     projects,
     saveStatus,

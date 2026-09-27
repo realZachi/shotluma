@@ -22,12 +22,16 @@ const ARTBOARD_ASPECT = EXPORT_FORMATS[0].width / EXPORT_FORMATS[0].height
 const captureSlideCanvas = async (slide: Slide, screenHeight: number): Promise<HTMLCanvasElement | null> => {
   const node = document.getElementById(`artboard-${slide.id}`)
   if (!node) return null
+  const rect = node.getBoundingClientRect()
+  const aspect = rect.width > 0 && rect.height > 0 ? rect.width / rect.height : ARTBOARD_ASPECT
+  const width = rect.width > 0 ? rect.width : EXPORT_ARTBOARD_WIDTH
+  const height = rect.height > 0 ? rect.height : EXPORT_ARTBOARD_WIDTH / ARTBOARD_ASPECT
   try {
     return await toCanvas(node, {
       pixelRatio: 1,
-      width: EXPORT_ARTBOARD_WIDTH,
-      height: EXPORT_ARTBOARD_WIDTH / ARTBOARD_ASPECT,
-      canvasWidth: Math.round(screenHeight * ARTBOARD_ASPECT),
+      width,
+      height,
+      canvasWidth: Math.round(screenHeight * aspect),
       canvasHeight: screenHeight,
       backgroundColor: slide.background.color1,
       filter: (candidate: HTMLElement) =>
@@ -77,7 +81,8 @@ const drawScreen = (
   placement: ScreenPlacement,
 ) => {
   const height = placement.height
-  const width = Math.round(height * ARTBOARD_ASPECT)
+  const aspect = screen.height > 0 ? screen.width / screen.height : ARTBOARD_ASPECT
+  const width = Math.round(height * aspect)
   context.save()
   context.translate(placement.x, placement.y)
   context.rotate(placement.rotation)

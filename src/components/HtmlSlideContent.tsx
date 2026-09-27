@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { resolveAssetReferences } from '../html-slide/assets'
 import { deviceElementFromAttributes } from '../html-slide/device-attributes'
@@ -16,6 +16,21 @@ type DeviceMount = {
 type Props = {
   html: string
   uploads: UploadAsset[]
+  interactive?: boolean | undefined
+  onUpdateHtml?: ((newHtml: string) => void) | undefined
+}
+
+const getCleanSlideHtml = (container: HTMLElement) => {
+  const clone = container.cloneNode(true) as HTMLElement
+  clone.querySelectorAll('[contenteditable]').forEach((el) => {
+    el.removeAttribute('contenteditable')
+    el.removeAttribute('spellcheck')
+    el.removeAttribute('data-html-editable')
+  })
+  clone.querySelectorAll('shotluma-device').forEach((dev) => {
+    dev.innerHTML = ''
+  })
+  return clone.innerHTML
 }
 
 /**
@@ -26,7 +41,12 @@ type Props = {
  * renderer through portals so licensed overlays and matrix3d perspective
  * stay identical to structured device elements.
  */
-export const HtmlSlideContent = ({ html, uploads }: Props) => {
+export const HtmlSlideContent = ({
+  html,
+  uploads,
+  interactive = false,
+  onUpdateHtml,
+}: Props) => {
   const resolvedHtml = useMemo(() => {
     const { html: sanitized } = sanitizeScreenHtml(html)
     return resolveAssetReferences(
@@ -37,6 +57,11 @@ export const HtmlSlideContent = ({ html, uploads }: Props) => {
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [mounts, setMounts] = useState<DeviceMount[]>([])
+  const onUpdateHtmlRef = useRef(onUpdateHtml)
+
+  useEffect(() => {
+    onUpdateHtmlRef.current = onUpdateHtml
+  }, [onUpdateHtml])
 
   useLayoutEffect(() => {
     const container = containerRef.current
@@ -54,10 +79,45 @@ export const HtmlSlideContent = ({ html, uploads }: Props) => {
         shadow: node.getAttribute('shadow'),
       }, index),
     })))
-  }, [resolvedHtml])
+
+    if (interactive) {
+      const textSelectors = 'h1, h2, h3, h4, h5, h6, p, small, blockquote, [class*="headline"], [class*="title"], [class*="subtitle"], [class*="badge"], [class*="copy"]'
+      const textNodes = Array.from(container.querySelectorAll<HTMLElement>(textSelectors))
+      textNodes.forEach((node) => {
+        node.setAttribute('contenteditable', 'true')
+        node.setAttribute('spellcheck', 'false')
+        node.setAttribute('data-html-editable', 'true')
+      })
+
+      const handleBlur = (event: FocusEvent) => {
+        const target = event.target as HTMLElement | null
+        if (target?.hasAttribute('data-html-editable')) {
+          const cleanHtml = getCleanSlideHtml(container)
+          onUpdateHtmlRef.current?.(cleanHtml)
+        }
+      }
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          const target = event.target as HTMLElement | null
+          if (target?.hasAttribute('data-html-editable')) {
+            target.blur()
+          }
+        }
+      }
+
+      container.addEventListener('focusout', handleBlur)
+      container.addEventListener('keydown', handleKeyDown)
+      return () => {
+        container.removeEventListener('focusout', handleBlur)
+        container.removeEventListener('keydown', handleKeyDown)
+      }
+    }
+    return undefined
+  }, [interactive, resolvedHtml])
 
   return (
-    <div className="html-slide-surface">
+    <div className={`html-slide-surface${interactive ? ' is-interactive' : ''}`}>
       <div ref={containerRef} className="html-slide-scale" />
       {mounts.map((mount) => createPortal(<DeviceMockup element={mount.element} />, mount.node, mount.key))}
     </div>

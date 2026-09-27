@@ -175,6 +175,118 @@ export const makeTemplate = (template: TemplateId, name = 'Screen'): Slide => {
     }
   }
 
+  if (template === 'slate') {
+    return {
+      id: uid('slide'),
+      name,
+      background: { type: 'gradient', color1: '#1e293b', color2: '#0f172a', angle: 145 },
+      elements: [
+        text('Designed for\ntablet power.', [8, 6.8, 84, 40, '#f8fafc'], { lineHeight: 0.93 }),
+        text('Experience the full desktop dashboard in your hands.', [8.5, 19.8, 80, 14, '#94a3b8'], {
+          fontFamily: 'Instrument Sans Variable',
+          fontWeight: 540,
+          letterSpacing: -0.2,
+          lineHeight: 1.25,
+        }),
+        shape('pill', [8, 29, 32, '#0284c7']),
+        text('PRO WORKSPACE', [11, 30.5, 26, 8, '#ffffff'], {
+          fontFamily: 'Instrument Sans Variable',
+          fontWeight: 750,
+          letterSpacing: 1,
+          lineHeight: 1,
+        }),
+        device([12, 36, 76, 0, 'night', 'ipad-pro-portrait'], { shadow: 62 }),
+        text('IPAD & TABLET READY', [8, 92, 50, 9, '#64748b'], {
+          fontFamily: 'Instrument Sans Variable',
+          fontWeight: 720,
+          letterSpacing: 1.2,
+          lineHeight: 1,
+        }),
+      ],
+    }
+  }
+
+  if (template === 'cyber') {
+    return {
+      id: uid('slide'),
+      name,
+      background: { type: 'solid', color1: '#09090b', color2: '#09090b', angle: 135 },
+      elements: [
+        text('Pure speed.\nZero friction.', [8, 6.8, 84, 42, '#ffffff'], { lineHeight: 0.92 }),
+        text('Optimized for modern Android performance.', [8.5, 20.5, 78, 14, '#a1a1aa'], {
+          fontFamily: 'Instrument Sans Variable',
+          fontWeight: 540,
+          letterSpacing: -0.2,
+          lineHeight: 1.25,
+        }),
+        shape('circle', [74, 27, 16, '#10b981']),
+        device([17, 30, 66, 0, 'mint', 'android-phone'], { shadow: 58 }),
+        text('01 / GOOGLE PLAY', [8, 92, 45, 9, '#71717a'], {
+          fontFamily: 'Instrument Sans Variable',
+          fontWeight: 720,
+          letterSpacing: 1.2,
+          lineHeight: 1,
+        }),
+      ],
+    }
+  }
+
+  if (template === 'split-tablet') {
+    return {
+      id: uid('slide'),
+      name,
+      background: { type: 'gradient', color1: '#0b1120', color2: '#1e293b', angle: 135 },
+      elements: [
+        text('Desktop caliber.\nOn the go.', [8, 6.5, 84, 42, '#f8fafc'], { lineHeight: 0.92 }),
+        text('Full multitasking workspace optimized for tablet workflows.', [8.5, 20.5, 78, 14, '#94a3b8'], {
+          fontFamily: 'Instrument Sans Variable',
+          fontWeight: 540,
+          letterSpacing: -0.2,
+          lineHeight: 1.25,
+        }),
+        shape('pill', [8, 29.5, 28, '#38bdf8']),
+        text('LANDSCAPE STUDIO', [10.5, 31, 23, 8, '#082f49'], {
+          fontFamily: 'Instrument Sans Variable',
+          fontWeight: 800,
+          letterSpacing: 0.8,
+          lineHeight: 1,
+        }),
+        device([5, 38, 90, 0, 'night', 'ipad-pro-landscape'], { shadow: 65, cleanStatusBar: true }),
+        text('IPAD & TABLET SUITE', [8, 92, 45, 9, '#64748b'], {
+          fontFamily: 'Instrument Sans Variable',
+          fontWeight: 720,
+          letterSpacing: 1.2,
+          lineHeight: 1,
+        }),
+      ],
+    }
+  }
+
+  if (template === 'panoramic-duo') {
+    return {
+      id: uid('slide'),
+      name,
+      background: { type: 'gradient', color1: '#2e1065', color2: '#0f172a', angle: 140 },
+      elements: [
+        text('Seamless flow\nacross screens.', [8, 6.8, 84, 42, '#faf5ff'], { lineHeight: 0.92 }),
+        text('Panoramic storytelling that connects continuous screenshots.', [8.5, 20.8, 78, 14, '#c084fc'], {
+          fontFamily: 'Instrument Sans Variable',
+          fontWeight: 540,
+          letterSpacing: -0.2,
+          lineHeight: 1.25,
+        }),
+        shape('circle', [76, 28, 18, '#f43f5e']),
+        device([45, 32, 75, 0, 'coral', 'iphone-17-a'], { shadow: 60, spansScreens: true, cleanStatusBar: true }),
+        text('02 / PANORAMA', [8, 92, 40, 9, '#a855f7'], {
+          fontFamily: 'Instrument Sans Variable',
+          fontWeight: 720,
+          letterSpacing: 1.2,
+          lineHeight: 1,
+        }),
+      ],
+    }
+  }
+
   return {
     id: uid('slide'),
     name,
@@ -208,6 +320,10 @@ export const templateMeta: { id: TemplateId; name: string; eyebrow: string }[] =
   { id: 'paper', name: 'Editorial calm', eyebrow: 'Soft / premium' },
   { id: 'lime', name: 'Electric launch', eyebrow: 'Bright / energetic' },
   { id: 'coral', name: 'Warm story', eyebrow: 'Color / lifestyle' },
+  { id: 'slate', name: 'Tablet Pro', eyebrow: 'iPad / SaaS' },
+  { id: 'cyber', name: 'Android Pulse', eyebrow: 'Modern / mobile' },
+  { id: 'split-tablet', name: 'Studio Split', eyebrow: 'iPad landscape' },
+  { id: 'panoramic-duo', name: 'Panoramic Seam', eyebrow: 'Multi-screen flow' },
 ]
 
 export const fontOptions = [

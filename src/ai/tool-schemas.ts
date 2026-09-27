@@ -74,9 +74,12 @@ export const deviceStyleSchema = z
     'iphone-17-e',
     'iphone-17-f',
     'tilted-hand',
+    'ipad-pro-portrait',
+    'ipad-pro-landscape',
+    'android-phone',
   ])
   .describe(
-    'Photorealistic iPhone style. The prompt gives composition ranges for each style.',
+    'Photorealistic device style. The prompt gives composition ranges for each style.',
   )
 
 export const screenThemeSchema = z

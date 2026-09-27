@@ -9,9 +9,11 @@ export const getExportZipEntryPath = (
   index: number,
   slideName: string,
   nested: boolean,
+  locale?: string,
 ) => {
   const filename = getSlidePngFilename(index, slideName)
-  return nested ? `${formatFilename}/${filename}` : filename
+  const path = nested ? `${formatFilename}/${filename}` : filename
+  return locale && locale !== 'en-US' ? `${locale}/${path}` : path
 }
 
 export const getExportZipDownloadName = (

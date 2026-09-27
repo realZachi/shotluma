@@ -18,6 +18,8 @@ The following overlays were added by the original Shotluma contributors. Git his
 | --- | --- | --- | --- |
 | `src/assets/mockups/iphone-17-a.webp` through `iphone-17-f.webp` | Transparent phone mockup overlays | MIT | None recorded |
 | `src/assets/mockups/tilted-hand.webp` | Transparent hand-held phone mockup overlay | MIT | None recorded |
+| `src/assets/mockups/ipad-pro-portrait.png`, `src/assets/mockups/ipad-pro-landscape.png`, `src/assets/mockups/mockup-apple-ipad-pro-11-2018-transparent.png` | Transparent iPad Pro mockup overlays in portrait and landscape | MIT | User-contributed transparent overlays |
+| `src/assets/mockups/android-phone.png` | Transparent modern Android phone mockup overlay | MIT | User-contributed transparent overlay |
 
 Before making the repository public, a maintainer should confirm that the project has the right to redistribute these PSD-derived overlays under MIT. If any overlay came from a third-party template, replace the entry above with the original creator, source URL, license, required attribution, and modification details. Remove or replace an asset if its license does not allow redistribution in an open-source repository.
 

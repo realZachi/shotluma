@@ -22,6 +22,7 @@ export const buildCodexBridgeAsset = async (): Promise<string> => {
 export const createCodexBridgeAssetPlugin = (): Plugin => ({
   name: 'shotluma-codex-bridge-asset',
   async buildStart() {
+    if (this.meta.watchMode) return
     this.emitFile({
       type: 'asset',
       fileName: CODEX_BRIDGE_ASSET_PATH.slice(1),

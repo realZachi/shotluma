@@ -19,6 +19,14 @@ describe('deviceElementFromAttributes', () => {
     })
   })
 
+  it('maps new ipad and android styles onto a device element', () => {
+    const ipad = deviceElementFromAttributes({ mockup: 'ipad-pro-portrait' }, 0)
+    expect(ipad.deviceStyle).toBe('ipad-pro-portrait')
+
+    const android = deviceElementFromAttributes({ mockup: 'android-phone' }, 1)
+    expect(android.deviceStyle).toBe('android-phone')
+  })
+
   it('falls back to safe defaults for unknown values', () => {
     const element = deviceElementFromAttributes({
       mockup: 'pixel-9',

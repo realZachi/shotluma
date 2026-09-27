@@ -3,7 +3,6 @@ import JSZip from 'jszip'
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react'
 import { downloadBlob } from '../utils'
 import {
-  EXPORT_ARTBOARD_WIDTH,
   EXPORT_FORMATS,
   type ExportFormat,
   type ExportTarget,
@@ -30,10 +29,13 @@ async function renderSlidePng(
   const node = document.getElementById(`artboard-${slide.id}`)
   if (!node) return null
 
+  const width = format.editorWidth
+  const height = Math.round(format.editorWidth * format.height / format.width)
+
   const options = {
     pixelRatio: 1,
-    width: EXPORT_ARTBOARD_WIDTH,
-    height: EXPORT_ARTBOARD_WIDTH * format.height / format.width,
+    width,
+    height,
     canvasWidth: format.width,
     canvasHeight: format.height,
     backgroundColor: slide.background.color1,

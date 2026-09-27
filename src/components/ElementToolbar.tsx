@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { SUPPORTED_LOCALES } from '../app/locale-types'
 import { fontOptions } from '../data'
 import { deviceOptions, getDevicePlacement } from '../mockups/catalog'
 import {
@@ -7,6 +8,7 @@ import {
   AlignRight,
   ArrowDown,
   ArrowUp,
+  BatteryFull,
   Bold,
   ChevronDown,
   Copy,
@@ -361,6 +363,59 @@ const TextControls = ({ element, onUpdate }: { element: Extract<CanvasElement, {
         <Button className="toolbar-format-button" variant={element.underline ? 'secondary' : 'ghost'} size="icon-sm" onClick={() => onUpdate({ underline: !element.underline })} aria-label="Underline" aria-pressed={element.underline}><Underline /></Button>
         <Button className="toolbar-format-button" variant={element.strikethrough ? 'secondary' : 'ghost'} size="icon-sm" onClick={() => onUpdate({ strikethrough: !element.strikethrough })} aria-label="Strikethrough" aria-pressed={element.strikethrough}><Strikethrough /></Button>
       </div>
+      <Popover>
+        <PopoverTrigger render={<Button variant="outline" size="sm" aria-label="Manage translations" />}>
+          <span>Translations</span>
+          {element.translations && Object.keys(element.translations).length > 0 && (
+            <span style={{ fontSize: '10px', background: 'var(--muted)', padding: '1px 5px', borderRadius: '999px', marginLeft: '4px' }}>
+              {Object.keys(element.translations).length}
+            </span>
+          )}
+          <ChevronDown className="toolbar-control-chevron" />
+        </PopoverTrigger>
+        <PopoverContent align="start" sideOffset={9} className="toolbar-control-popover" style={{ width: '310px', maxHeight: '380px', overflowY: 'auto' }}>
+          <PopoverHeader className="toolbar-control-popover-header">
+            <PopoverTitle>Text Translations</PopoverTitle>
+            <small style={{ fontSize: '10px', color: 'var(--muted-foreground)' }}>Default: EN</small>
+          </PopoverHeader>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '6px 0' }}>
+            {SUPPORTED_LOCALES.filter((l) => l.code !== 'en-US').map((locale) => {
+              const currentTranslation = element.translations?.[locale.code]?.text ?? ''
+              return (
+                <div key={locale.code} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px' }}>
+                    <span>{locale.flag} <strong>{locale.label}</strong></span>
+                    <small style={{ color: 'var(--muted-foreground)' }}>{locale.code}</small>
+                  </div>
+                  <input
+                    type="text"
+                    value={currentTranslation}
+                    placeholder={element.text}
+                    className="h-7 w-full rounded-md border border-input bg-transparent px-2 py-0.5 text-xs outline-none"
+                    onChange={(e) => {
+                      const nextText = e.target.value
+                      const currentTranslations = element.translations ?? {}
+                      if (nextText.trim() === '') {
+                        const rest = Object.fromEntries(
+                          Object.entries(currentTranslations).filter(([key]) => key !== locale.code),
+                        )
+                        onUpdate({ translations: rest })
+                      } else {
+                        onUpdate({
+                          translations: {
+                            ...currentTranslations,
+                            [locale.code]: { text: nextText },
+                          },
+                        })
+                      }
+                    }}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
     </>
   )
 }
@@ -393,6 +448,71 @@ const DeviceControls = ({ element, onUpdate, onUpload }: {
         {element.screenshot ? <ImagePlus /> : <Upload />}
         {element.screenshot ? 'Replace screenshot' : 'Add screenshot'}
       </Button>
+      <Popover>
+        <PopoverTrigger render={<Button variant={element.cleanStatusBar ? 'secondary' : 'outline'} size="sm" aria-label="Status Bar settings" />}>
+          <BatteryFull size={14} />
+          <span>Status Bar</span>
+          <ChevronDown className="toolbar-control-chevron" />
+        </PopoverTrigger>
+        <PopoverContent align="start" sideOffset={9} className="toolbar-control-popover" style={{ width: '280px' }}>
+          <PopoverHeader className="toolbar-control-popover-header">
+            <PopoverTitle>Clean Status Bar</PopoverTitle>
+            <strong>{element.cleanStatusBar ? 'Active' : 'Off'}</strong>
+          </PopoverHeader>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <Button
+              variant={element.cleanStatusBar ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onUpdate({ cleanStatusBar: !element.cleanStatusBar })}
+              style={{ justifyContent: 'center' }}
+            >
+              {element.cleanStatusBar ? 'Disable Status Bar' : 'Enable 9:41 Status Bar'}
+            </Button>
+            {element.cleanStatusBar && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--muted-foreground)' }}>Icons Theme:</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <Button
+                      size="xs"
+                      variant={element.statusBarTheme !== 'dark' ? 'secondary' : 'outline'}
+                      onClick={() => onUpdate({ statusBarTheme: 'light' })}
+                    >
+                      Dark
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant={element.statusBarTheme === 'dark' ? 'secondary' : 'outline'}
+                      onClick={() => onUpdate({ statusBarTheme: 'dark' })}
+                    >
+                      Light
+                    </Button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--muted-foreground)' }}>Display Time:</span>
+                  <input
+                    type="text"
+                    value={element.statusBarTime ?? ''}
+                    placeholder={element.deviceStyle === 'android-phone' ? '10:00' : '9:41'}
+                    maxLength={8}
+                    className="h-7 w-20 rounded-md border border-input bg-transparent px-2 py-0.5 text-xs outline-none"
+                    onChange={(e) => onUpdate({ statusBarTime: e.target.value })}
+                  />
+                </div>
+                <Button
+                  variant={element.showDynamicIsland ? 'secondary' : 'outline'}
+                  size="xs"
+                  onClick={() => onUpdate({ showDynamicIsland: !element.showDynamicIsland })}
+                  style={{ justifyContent: 'center' }}
+                >
+                  {element.showDynamicIsland ? '✓ Dynamic Island Cutout' : '+ Add Dynamic Island Cutout'}
+                </Button>
+              </>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
       <ToolbarRange label="Shadow" value={element.shadow} min={0} max={100} displayValue={`${Math.round(element.shadow)}%`} presets={percentPresets} onChange={(shadow) => onUpdate({ shadow })} />
       <Button
         variant={element.spansScreens ? 'secondary' : 'ghost'}

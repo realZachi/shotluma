@@ -45,9 +45,11 @@ import {
   Shapes as ShapesIcon,
   SignalIcon,
   SlidersHorizontalIcon,
+  SmartPhone01Icon,
   SparklesIcon,
   StartUp02Icon,
   Strikethrough as StrikethroughIcon,
+  Tablet01Icon,
   Trash2 as Trash2Icon,
   Type as TypeIcon,
   Underline as UnderlineIcon,
@@ -112,9 +114,11 @@ export const Search01 = createIcon(Search01Icon)
 export const Shapes = createIcon(ShapesIcon)
 export const Signal = createIcon(SignalIcon)
 export const SlidersHorizontal = createIcon(SlidersHorizontalIcon)
+export const SmartPhone01 = createIcon(SmartPhone01Icon)
 export const Sparkles = createIcon(SparklesIcon)
 export const StartUp02 = createIcon(StartUp02Icon)
 export const Strikethrough = createIcon(StrikethroughIcon)
+export const Tablet01 = createIcon(Tablet01Icon)
 export const Trash2 = createIcon(Trash2Icon)
 export const Type = createIcon(TypeIcon)
 export const Underline = createIcon(UnderlineIcon)

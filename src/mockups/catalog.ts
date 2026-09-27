@@ -1,3 +1,6 @@
+import androidPhoneOverlay from '../assets/mockups/android-phone.png'
+import ipadProLandscapeOverlay from '../assets/mockups/ipad-pro-landscape.png'
+import ipadProPortraitOverlay from '../assets/mockups/ipad-pro-portrait.png'
 import iphone17AOverlay from '../assets/mockups/iphone-17-a.webp'
 import iphone17BOverlay from '../assets/mockups/iphone-17-b.webp'
 import iphone17COverlay from '../assets/mockups/iphone-17-c.webp'
@@ -38,6 +41,30 @@ const iphone17ScreenMask = {
   bottom: 13 / 1532,
   left: 7 / 723,
   cornerRadius: 100 / 723,
+}
+
+const ipadProPortraitScreenMask = {
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  cornerRadius: 24 / 515,
+}
+
+const ipadProLandscapeScreenMask = {
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  cornerRadius: 26 / 763,
+}
+
+const androidPhoneScreenMask = {
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  cornerRadius: 38 / 339,
 }
 
 export const photoMockups: Record<DeviceStyle, PhotoMockupDefinition> = {
@@ -131,6 +158,45 @@ export const photoMockups: Record<DeviceStyle, PhotoMockupDefinition> = {
       { x: (3033.7505437034424 - 1591) / 4409, y: (3366.6787577701266 - 443) / 3728 },
     ],
   },
+  'ipad-pro-portrait': {
+    overlay: ipadProPortraitOverlay,
+    canvasAspectRatio: 578 / 800,
+    sourceAspectRatio: 515 / 738,
+    defaultPlacement: { x: 14, y: 16, width: 72, rotation: 0 },
+    screenMask: ipadProPortraitScreenMask,
+    screenQuad: [
+      { x: 31 / 578, y: 32 / 800 },
+      { x: 546 / 578, y: 32 / 800 },
+      { x: 546 / 578, y: 770 / 800 },
+      { x: 31 / 578, y: 770 / 800 },
+    ],
+  },
+  'ipad-pro-landscape': {
+    overlay: ipadProLandscapeOverlay,
+    canvasAspectRatio: 800 / 575,
+    sourceAspectRatio: 763 / 537,
+    defaultPlacement: { x: 8, y: 22, width: 84, rotation: 0 },
+    screenMask: ipadProLandscapeScreenMask,
+    screenQuad: [
+      { x: 17 / 800, y: 20 / 575 },
+      { x: 780 / 800, y: 20 / 575 },
+      { x: 780 / 800, y: 557 / 575 },
+      { x: 17 / 800, y: 557 / 575 },
+    ],
+  },
+  'android-phone': {
+    overlay: androidPhoneOverlay,
+    canvasAspectRatio: 379 / 800,
+    sourceAspectRatio: 339 / 761,
+    defaultPlacement: { x: 17, y: 22, width: 66, rotation: 0 },
+    screenMask: androidPhoneScreenMask,
+    screenQuad: [
+      { x: 19 / 379, y: 20 / 800 },
+      { x: 358 / 379, y: 20 / 800 },
+      { x: 358 / 379, y: 781 / 800 },
+      { x: 19 / 379, y: 781 / 800 },
+    ],
+  },
 }
 
 export const deviceOptions: { id: DeviceStyle; label: string; kind: 'photo'; preview: string }[] = [
@@ -141,6 +207,9 @@ export const deviceOptions: { id: DeviceStyle; label: string; kind: 'photo'; pre
   { id: 'iphone-17-e', label: '17 Pro · Flat', kind: 'photo', preview: iphone17EOverlay },
   { id: 'iphone-17-f', label: '17 Pro · Leaning', kind: 'photo', preview: iphone17FOverlay },
   { id: 'tilted-hand', label: 'Hand · Tilted', kind: 'photo', preview: tiltedHandOverlay },
+  { id: 'ipad-pro-portrait', label: 'iPad Pro · Portrait', kind: 'photo', preview: ipadProPortraitOverlay },
+  { id: 'ipad-pro-landscape', label: 'iPad Pro · Landscape', kind: 'photo', preview: ipadProLandscapeOverlay },
+  { id: 'android-phone', label: 'Android · Portrait', kind: 'photo', preview: androidPhoneOverlay },
 ]
 
 export const getDevicePlacement = (style: DeviceStyle) => photoMockups[style].defaultPlacement

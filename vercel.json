@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/api/moonshot/(.*)", "destination": "https://api.moonshot.ai/$1" },
+    { "source": "/api/opencode/go/(.*)", "destination": "https://opencode.ai/zen/go/$1" },
+    { "source": "/api/opencode/zen/(.*)", "destination": "https://opencode.ai/zen/$1" },
+    { "source": "/api/share/(.*)", "destination": "https://app.shotluma.com/api/share/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

@@ -1,11 +1,12 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { getScreenFormat, type ExportFormat } from '../app/export-formats'
 import { DRAG_MAX, getDragMaxX, getDragMinX, getDragMinY } from '../editor/drag-bounds'
 import { getSpanGhosts } from '../editor/screen-span'
 import { clamp, getBackgroundPatternStyle, getBackgroundStyle } from '../utils'
 import { AiCursorOverlay } from './AiCursorOverlay'
 import { CanvasItem, SpanGhostItem } from './CanvasElementView'
 import { HtmlSlideContent } from './HtmlSlideContent'
-import { AiGenerative, ChevronLeft, ChevronRight, Copy, CursorMagicSelection02, Plus, Trash2 } from './icons'
+import { AiGenerative, ChevronLeft, ChevronRight, Copy, CursorMagicSelection02, Layers3, Plus, Trash2 } from './icons'
 import { Button } from './ui/button'
 import type { CanvasElement, Slide, UploadAsset } from '../types'
 
@@ -31,13 +32,15 @@ type Props = {
   uploads: UploadAsset[]
   activeSlideId: string
   selectedElementIds: string[]
+  screenFormat?: ExportFormat
   exporting: boolean
   zoom: number
+  activeLocale?: string | undefined
   aiActivity?: AiActivity | null
   onSetActiveSlide: (id: string) => void
   onSelectElement: (id: string | null, slideId?: string, additive?: boolean) => void
   onUpdateElements: (slideId: string, updates: { id: string; patch: Partial<CanvasElement> }[]) => void
-  onCommitText: (slideId: string, id: string, patch: { text: string; html?: string }) => void
+  onCommitText: (slideId: string, id: string, patch: { text: string; html?: string; translations?: Record<string, { text: string; html?: string }> }) => void
   onCheckpoint: () => void
   onAddSlide: () => void
   onDuplicateSlide: (id: string) => void
@@ -45,6 +48,8 @@ type Props = {
   onMoveSlide: (id: string, direction: -1 | 1) => void
   onEditSlideWithAi: (id: string) => void
   onGenerateWithAi: () => void
+  onUpdateSlideHtml?: ((slideId: string, html: string) => void) | undefined
+  onConvertSlideToElements?: ((slideId: string) => void) | undefined
   aiActionsDisabled?: boolean
 }
 
@@ -53,8 +58,10 @@ export const EditorCanvas = ({
   uploads,
   activeSlideId,
   selectedElementIds,
+  screenFormat = getScreenFormat(),
   exporting,
   zoom,
+  activeLocale,
   aiActivity,
   onSetActiveSlide,
   onSelectElement,
@@ -67,6 +74,8 @@ export const EditorCanvas = ({
   onMoveSlide,
   onEditSlideWithAi,
   onGenerateWithAi,
+  onUpdateSlideHtml,
+  onConvertSlideToElements,
   aiActionsDisabled = false,
 }: Props) => {
   const interaction = useRef<Interaction | null>(null)
@@ -137,9 +146,10 @@ export const EditorCanvas = ({
     const dy = ((event.clientY - current.startY) / current.artboard.height) * 100
 
     if (current.type === 'drag') {
+      const artboardAspectRatio = screenFormat.width / screenFormat.height
       const minDx = Math.max(...current.elements.map((item) => getDragMinX(item) - item.x))
       const maxDx = Math.min(...current.elements.map((item) => getDragMaxX(item) - item.x))
-      const minDy = Math.max(...current.elements.map((item) => getDragMinY(item) - item.y))
+      const minDy = Math.max(...current.elements.map((item) => getDragMinY(item, artboardAspectRatio) - item.y))
       const maxDy = Math.min(...current.elements.map((item) => DRAG_MAX - item.y))
       let nextDx = clamp(dx, minDx, maxDx)
       let nextDy = clamp(dy, minDy, maxDy)
@@ -231,7 +241,17 @@ export const EditorCanvas = ({
             </section>
           )
         : (
-            <div className="artboards" style={{ '--zoom': zoom } as React.CSSProperties}>
+            <div
+              className="artboards"
+              style={{
+                '--zoom': zoom,
+                '--artboard-width': `${screenFormat.editorWidth}px`,
+                '--artboard-aspect': `${screenFormat.width} / ${screenFormat.height}`,
+                '--canvas-width': `${screenFormat.width}px`,
+                '--canvas-height': `${screenFormat.height}px`,
+                '--artboard-height': `${Math.round(screenFormat.editorWidth * screenFormat.height / screenFormat.width)}px`,
+              } as React.CSSProperties}
+            >
               {slides.map((slide, index) => {
                 const isActive = slide.id === activeSlideId
                 const isAiTarget = aiActivity?.slideId === slide.id
@@ -243,6 +263,17 @@ export const EditorCanvas = ({
                       <span>{String(index + 1).padStart(2, '0')}</span>
                       <strong>{slide.name}</strong>
                       <div className="artboard-screen-actions">
+                        {slide.html !== undefined && (
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => onConvertSlideToElements?.(slide.id)}
+                            title="Convert to movable & editable canvas elements"
+                            aria-label="Convert to movable canvas elements"
+                          >
+                            <Layers3 size={13} />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon-xs"
@@ -269,7 +300,14 @@ export const EditorCanvas = ({
                       }}
                     >
                       {slide.html !== undefined
-                        ? <HtmlSlideContent html={slide.html} uploads={uploads} />
+                        ? (
+                            <HtmlSlideContent
+                              html={slide.html}
+                              uploads={uploads}
+                              interactive={!exporting}
+                              onUpdateHtml={(newHtml) => onUpdateSlideHtml?.(slide.id, newHtml)}
+                            />
+                          )
                         : (
                             <>
                               <div className={`artboard-background pattern-surface pattern--${pattern}`} style={backgroundStyle} />
@@ -280,6 +318,7 @@ export const EditorCanvas = ({
                                   selected={selectedElementIds.includes(element.id)}
                                   showTransformHandles={selectedElementIds.length === 1}
                                   exporting={exporting}
+                                  locale={activeLocale}
                                   onSelect={(additive) => onSelectElement(element.id, slide.id, additive)}
                                   onBeginDrag={(event, item) => begin('drag', event, slide.id, item)}
                                   onBeginResize={(event, item) => begin('resize', event, slide.id, item)}
@@ -296,7 +335,9 @@ export const EditorCanvas = ({
                       {snapGuides?.slideId === slide.id && snapGuides.horizontal && <div className="snap-guide snap-guide--horizontal" data-editor-overlay aria-hidden="true" />}
                       {aiActivity?.slideId === slide.id && !exporting && <AiCursorOverlay activity={aiActivity} />}
                     </div>
-                    <div className="artboard-size">1290 × 2796 px</div>
+                    <div className="artboard-size">
+                      {screenFormat.width} × {screenFormat.height} px · {screenFormat.shortLabel}
+                    </div>
                   </section>
                 )
               })}

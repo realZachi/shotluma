@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAiWorkflow } from './ai/use-ai-workflow'
 import { AiRunCancelDialog } from './app/AiRunCancelDialog'
 import { AppHeader } from './app/AppHeader'
+import { getScreenFormat } from './app/export-formats'
+import { DEFAULT_LOCALE } from './app/locale-types'
 import { loadInitialState } from './app/project-utils'
 import { ProjectDeleteDialog } from './app/ProjectDeleteDialog'
 import { ShareLinkDialog } from './app/ShareLinkDialog'
@@ -13,9 +15,11 @@ import { EditorCanvas } from './components/EditorCanvas'
 import { ElementToolbar } from './components/ElementToolbar'
 import { Check, Minus, Plus, X } from './components/icons'
 import { PropertiesPanel, ToolRail } from './components/Sidebar'
+import { StorePreviewModal } from './components/StorePreviewModal'
 import { useEditorActions } from './editor/use-editor-actions'
 import { useEditorHistory } from './editor/use-editor-history'
 import { useEditorKeyboard } from './editor/use-editor-keyboard'
+import { convertHtmlSlideToElements } from './html-slide/convert-to-elements'
 import type { Slide, ToolId } from './types'
 
 const getActiveSlide = (slides: Slide[], activeSlideId: string) => {
@@ -35,6 +39,8 @@ export default function App() {
   const [zoom, setZoom] = useState(0.9)
   const [toast, setToast] = useState<string | null>(null)
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [storePreviewOpen, setStorePreviewOpen] = useState(false)
+  const [activeLocale, setActiveLocale] = useState<string>(DEFAULT_LOCALE)
 
   const selectedElementId = selectedElementIds.at(-1) ?? null
   const clearSelection = useCallback(() => setSelectedElementIds([]), [])
@@ -158,7 +164,7 @@ export default function App() {
   const commitElementText = useCallback((
     slideId: string,
     elementId: string,
-    patch: { text: string; html?: string },
+    patch: { text: string; html?: string; translations?: Record<string, { text: string; html?: string }> },
   ) => {
     commit((current) => current.map((slide) => slide.id === slideId
       ? {
@@ -169,6 +175,29 @@ export default function App() {
         }
       : slide))
   }, [commit])
+
+  const handleUpdateSlideHtml = useCallback((slideId: string, html: string) => {
+    history.checkpoint()
+    commit((current) => current.map((slide) => slide.id === slideId
+      ? { ...slide, html }
+      : slide))
+  }, [commit, history])
+
+  const handleConvertSlideToElements = useCallback((slideId: string) => {
+    history.checkpoint()
+    commit((current) => current.map((slide) => {
+      if (slide.id !== slideId || !slide.html) return slide
+      const { elements, background } = convertHtmlSlideToElements(slide, uploadsRef.current)
+      const converted: Slide = {
+        ...slide,
+        background,
+        elements,
+      }
+      delete converted.html
+      return converted
+    }))
+    setToast('Converted to movable & editable canvas elements')
+  }, [commit, history, setToast, uploadsRef])
 
   const actions = useEditorActions({
     slides,
@@ -185,6 +214,8 @@ export default function App() {
     setToast,
   })
 
+  const screenFormat = getScreenFormat(project.canvasFormatId)
+
   useEditorKeyboard({
     activeSlide,
     selectedElementIds,
@@ -193,6 +224,13 @@ export default function App() {
     undo: history.undo,
     redo: history.redo,
     deleteSelected,
+    onDuplicate: actions.duplicateSelected,
+    onToggleLock: actions.toggleLock,
+    onMoveLayer: actions.moveSelectedLayer,
+    onSelectAll: () => activeSlide && setSelectedElementIds(activeSlide.elements.map((element) => element.id)),
+    onClearSelection: clearSelection,
+    editorWidth: screenFormat.editorWidth,
+    editorHeight: Math.round(screenFormat.editorWidth * screenFormat.height / screenFormat.width),
   })
 
   const slideExport = useSlideExport({
@@ -230,6 +268,10 @@ export default function App() {
     >
       <AppHeader
         projectName={project.projectName}
+        canvasFormatId={project.canvasFormatId}
+        onSelectCanvasFormat={project.setCanvasFormatId}
+        activeLocale={activeLocale}
+        onSelectLocale={setActiveLocale}
         saveStatus={project.saveStatus}
         lastSavedAt={project.lastSavedAt}
         projects={project.projects}
@@ -252,6 +294,7 @@ export default function App() {
         onUndo={history.undo}
         onRedo={history.redo}
         onOpenAi={ai.openGenerator}
+        onOpenStorePreview={() => setStorePreviewOpen(true)}
         onExport={(target) => void slideExport.exportAll(target)}
       >
         {selectedElement && selectedElementIds.length === 1 && (
@@ -303,8 +346,10 @@ export default function App() {
           uploads={uploads}
           activeSlideId={resolvedActiveSlideId}
           selectedElementIds={selectedElementIds}
+          screenFormat={screenFormat}
           exporting={slideExport.exporting}
           zoom={zoom}
+          activeLocale={activeLocale}
           aiActivity={ai.activity}
           onSetActiveSlide={setActiveSlideId}
           onSelectElement={selectElement}
@@ -317,6 +362,8 @@ export default function App() {
           onMoveSlide={actions.moveSlide}
           onEditSlideWithAi={ai.openEditor}
           onGenerateWithAi={ai.openGenerator}
+          onUpdateSlideHtml={handleUpdateSlideHtml}
+          onConvertSlideToElements={handleConvertSlideToElements}
           aiActionsDisabled={aiActionsDisabled}
         />
         {hasSlides && (
@@ -382,6 +429,14 @@ export default function App() {
           onRunStateChange={ai.handleRunStateChange}
         />
       )}
+      <StorePreviewModal
+        open={storePreviewOpen}
+        onClose={() => setStorePreviewOpen(false)}
+        slides={slides}
+        uploads={uploads}
+        projectName={project.projectName}
+        screenFormat={screenFormat}
+      />
       <div className="mobile-blocker">
         <span className="brand-symbol" aria-hidden="true">
           <img src={APP_LOGO_URL} alt="" width="30" height="30" />

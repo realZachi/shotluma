@@ -65,10 +65,10 @@ ${process}
 - The design must be fully static: it is rasterized to a PNG.
 
 ## Device mockups - <shotluma-device>
-Real photographic iPhone mockups with your screenshot mapped onto the glass in true perspective. You cannot draw a device frame yourself - a CSS-built phone is a defect. Always use this component for any device:
+Photorealistic device mockups with your screenshot mapped onto the glass in true perspective. You cannot draw a device frame yourself - a CSS-built phone is a defect. Always use this component for any device:
 <shotluma-device mockup="iphone-17-a" screenshot="asset:UPLOAD_ID" shadow="55"></shotluma-device>
-- mockup: iphone-17-a (upright), iphone-17-b (front, straight-on), iphone-17-c (tilted right), iphone-17-d (tilted left), iphone-17-e (lying flat), iphone-17-f (leaning), tilted-hand (held in a hand).
-- The component is display:block and fills the width you give it; its height follows the mockup's aspect ratio (width:height) - a 766:1574, b 1188:2466, c 1917:1722, d 1951:1673, e 1803:1549, f 1673:1664, tilted-hand 4409:3728. Size and position it with your own CSS (width, position, transform, z-index) like any other element.
+- mockup: iphone-17-a (upright), iphone-17-b (front, straight-on), iphone-17-c (tilted right), iphone-17-d (tilted left), iphone-17-e (lying flat), iphone-17-f (leaning), tilted-hand (held in a hand), ipad-pro-portrait (iPad Pro portrait), ipad-pro-landscape (iPad Pro landscape), android-phone (modern Android phone).
+- The component is display:block and fills the width you give it; its height follows the mockup's aspect ratio (width:height) - a 766:1574, b 1188:2466, c 1917:1722, d 1951:1673, e 1803:1549, f 1673:1664, tilted-hand 4409:3728, ipad-pro-portrait 578:800, ipad-pro-landscape 800:575, android-phone 379:800. Size and position it with your own CSS (width, position, transform, z-index) like any other element.
 - screenshot: an uploaded screenshot asset (asset:ID). Omit it for a generic placeholder screen; theme="coral|mint|night|sun" picks the placeholder style. Never point it at the app logo.
 - Devices may bleed off the canvas edges for drama, but the screenshot's focal content must stay clearly visible - keep roughly 70% of the screen area on-canvas and never crop away the part of the UI the screen exists to show.
 - Composition: whatever the layout, claim the full 2796px-tall canvas. Headline block and device together should span roughly the whole height. If more than about a quarter of the canvas is one uninterrupted stretch of empty background, treat it as a defect.

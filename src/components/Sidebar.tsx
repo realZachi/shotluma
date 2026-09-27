@@ -83,7 +83,23 @@ const ColorField = ({ value, onChange, label }: { value: string; onChange: (valu
 
 const TemplatePreview = ({ id }: { id: TemplateId }) => (
   <div className={`template-preview template-preview--${id}`}>
-    <span className="mini-title">{id === 'ink' ? 'Build\nvisuals.' : id === 'paper' ? 'Your best\nwork.' : id === 'lime' ? 'Launch\nready.' : 'One\ncanvas.'}</span>
+    <span className="mini-title">
+      {id === 'ink'
+        ? 'Build\nvisuals.'
+        : id === 'paper'
+          ? 'Your best\nwork.'
+          : id === 'lime'
+            ? 'Launch\nready.'
+            : id === 'coral'
+              ? 'One\ncanvas.'
+              : id === 'slate'
+                ? 'iPad Pro\npower.'
+                : id === 'cyber'
+                  ? 'Android\npulse.'
+                  : id === 'split-tablet'
+                    ? 'Studio\nsplit.'
+                    : 'Seamless\nflow.'}
+    </span>
     <span className="mini-phone"><i /></span>
     <span className="mini-orb" />
   </div>

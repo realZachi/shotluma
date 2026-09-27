@@ -34,6 +34,7 @@ export type SharedProjectPayload = {
   projectName: string
   slides: Slide[]
   uploads: UploadAsset[]
+  canvasFormatId?: string
 }
 
 export const SHARE_HASH_PREFIX = '#share='
@@ -206,6 +207,7 @@ export const createShareLink = async (
     projectName: inlined.projectName,
     slides: inlined.slides,
     uploads: inlined.uploads,
+    ...(typeof inlined.canvasFormatId === 'string' ? { canvasFormatId: inlined.canvasFormatId } : {}),
   })
   const compressed = await compressText(json)
   const { origin, pathname } = window.location
@@ -277,6 +279,7 @@ const normalizeSharedProject = (value: unknown): SharedProjectPayload | null => 
     uploads: (Array.isArray(value['uploads']) ? value['uploads'] : [])
       .map(normalizeSharedUpload)
       .filter((upload): upload is UploadAsset => upload !== null),
+    ...(typeof value['canvasFormatId'] === 'string' ? { canvasFormatId: value['canvasFormatId'] } : {}),
   }
   return mapAssetSources(project, (src) => (isSafeImageSource(src) ? src : ''))
 }
