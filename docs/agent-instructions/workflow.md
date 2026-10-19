@@ -15,6 +15,8 @@ Do not broaden a task through opportunistic rewrites. A prerequisite refactor is
 - Add a dependency only when platform APIs and current dependencies cannot solve the problem cleanly.
 - Prefer maintained, typed packages with compatible licenses and a narrow runtime footprint.
 - Run `bun audit` after dependency changes.
+- Keep the `overrides` entries on the lowest patched release; they exist only to replace versions that dependents still pin.
+- The audit script ignores `GHSA-vfj7-8cjw-p6xm` (`braces`), which has no patched release upstream and only reaches the project through the shadcn CLI. Remove the ignore once `braces` publishes a fix.
 - Do not remove the `@hono/node-server` override without testing shadcn add/apply, the build, and the audit.
 - Do not edit `dist/`, coverage output, lockfile internals, or shadcn-generated source manually.
 
