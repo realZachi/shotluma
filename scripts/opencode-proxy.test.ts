@@ -42,6 +42,26 @@ describe('OpenCode CORS proxy rewrite', () => {
       new URL('https://app.shotluma.com/api/opencode/zen/v1/models'),
     )?.toString()).toBe('https://opencode.ai/zen/v1/models')
   })
+
+  it('never resolves to a host other than opencode.ai, even from an adversarial path', () => {
+    // A literal absolute URL in the path segment would otherwise make
+    // `new URL(relative, base)` discard `base` and hijack the upstream host,
+    // carrying the forwarded Authorization/x-api-key headers to it.
+    expect(rewriteOpencodeProxyUrl(
+      new URL('https://app.shotluma.com/api/opencode/go/https://evil.example/steal'),
+    )).toBeNull()
+    expect(rewriteOpencodeProxyUrl(
+      new URL('https://app.shotluma.com/api/opencode/zen/https://evil.example/steal'),
+    )).toBeNull()
+    expect(rewriteOpencodeProxyUrl(
+      new URL('https://app.shotluma.com/api/opencode/go/http://evil.example/steal'),
+    )).toBeNull()
+    // A protocol-relative segment (`//evil.example`) must stay anchored to the
+    // opencode.ai origin as a path, not be interpreted as a new host.
+    expect(rewriteOpencodeProxyUrl(
+      new URL('https://app.shotluma.com/api/opencode/go//evil.example/steal'),
+    )?.toString()).toBe('https://opencode.ai/zen/go/evil.example/steal')
+  })
 })
 
 describe('OpenCode CORS proxy headers and methods', () => {
@@ -106,6 +126,20 @@ describe('OpenCode CORS proxy headers and methods', () => {
       'https://app.shotluma.com/api/moonshot/v1/models',
       { method: 'GET' },
     ))).status).toBe(404)
+  })
+
+  it('rejects a crafted path trying to redirect the upstream host, without forwarding the request or its credentials', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const response = await proxyOpencodeRequest(new Request(
+      'https://app.shotluma.com/api/opencode/go/https://evil.example/steal',
+      { method: 'POST', headers: { authorization: 'Bearer victim-key' } },
+    ))
+
+    expect(response.status).toBe(404)
+    expect(fetchMock).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
   })
 
   it('forwards GET and POST to the rewritten OpenCode origin', async () => {

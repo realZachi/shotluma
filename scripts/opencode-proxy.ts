@@ -24,10 +24,22 @@ export const OPENCODE_FORWARDED_HEADERS = [
   'x-goog-api-key',
 ] as const
 
-const joinUpstream = (origin: string, suffix: string): URL => {
+/**
+ * Join a trusted upstream origin with the remainder of the incoming request
+ * path. The incoming path segment is attacker-controlled, so it must never
+ * be allowed to change the resolved origin: if it parses as an absolute or
+ * protocol-relative URL (e.g. a literal `https://evil.com/x` or `//evil.com`
+ * segment forwarded straight into `new URL(relative, base)`), the WHATWG URL
+ * spec lets it override `base` entirely and hijack the upstream host. Guard
+ * against that by re-checking the resolved origin against the expected
+ * upstream origin and refusing to proxy anywhere else.
+ */
+const joinUpstream = (origin: string, suffix: string): URL | null => {
   const base = `${origin.replace(/\/$/u, '')}/`
-  const relative = suffix.replace(/^\//u, '')
-  return new URL(relative, base)
+  const relative = suffix.replace(/^\/+/u, '')
+  const upstream = new URL(relative, base)
+  if (upstream.origin !== new URL(base).origin) return null
+  return upstream
 }
 
 /**
@@ -40,11 +52,13 @@ export const rewriteOpencodeProxyUrl = (requestUrl: URL): URL | null => {
   const search = requestUrl.search
   if (path === GO_PREFIX || path.startsWith(`${GO_PREFIX}/`)) {
     const upstream = joinUpstream(OPENCODE_GO_UPSTREAM, path.slice(GO_PREFIX.length))
+    if (!upstream) return null
     upstream.search = search
     return upstream
   }
   if (path === ZEN_PREFIX || path.startsWith(`${ZEN_PREFIX}/`)) {
     const upstream = joinUpstream(OPENCODE_ZEN_UPSTREAM, path.slice(ZEN_PREFIX.length))
+    if (!upstream) return null
     upstream.search = search
     return upstream
   }
