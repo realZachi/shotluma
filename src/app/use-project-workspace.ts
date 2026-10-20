@@ -8,6 +8,7 @@ import {
   removeLegacyProject,
   saveProject,
   setActiveProjectId,
+  ProjectSaveConflictError,
   type PersistedProject,
   type ProjectSummary,
 } from '../persistence'
@@ -43,6 +44,8 @@ type ProjectWorkspaceOptions = {
 
 const INTERRUPTED_GENERATION_MESSAGE =
   'The last AI generation was interrupted — finished screens were kept'
+const PROJECT_SAVE_CONFLICT_MESSAGE =
+  'Another tab saved a newer project version. This tab’s save was rejected; reload to get the latest version.'
 
 const makeNewProject = (
   projectName: string,
@@ -128,6 +131,8 @@ export function useProjectWorkspace({
   const [currentProjectId, setCurrentProjectId] = useState('current')
   const currentProjectIdRef = useRef('current')
   const currentProjectCreatedAtRef = useRef(0)
+  const savedAtByProjectRef = useRef(new Map<string, number>())
+  const saveConflictRef = useRef(false)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingProject, setDeletingProject] = useState(false)
@@ -138,6 +143,7 @@ export function useProjectWorkspace({
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
   const changeRevisionRef = useRef(0)
   const saveAttemptRef = useRef(0)
+  const saveFailureRevisionRef = useRef(0)
   const skipNextAutoSaveRef = useRef(false)
   const projectTransitionRef = useRef(false)
 
@@ -157,6 +163,8 @@ export function useProjectWorkspace({
   const replaceProject = useCallback((project: PersistedProject) => {
     currentProjectIdRef.current = project.id
     currentProjectCreatedAtRef.current = project.createdAt
+    savedAtByProjectRef.current.set(project.id, project.savedAt)
+    saveConflictRef.current = false
     projectNameRef.current = project.projectName
     slidesRef.current = project.slides
     uploadsRef.current = project.uploads
@@ -188,7 +196,9 @@ export function useProjectWorkspace({
         const interrupted = consumeInterruptedGeneration(project)
         if (interrupted) {
           project = interrupted
-          await saveProject(project)
+          const expectedSavedAt = project.savedAt
+          project = { ...project, savedAt: Math.max(Date.now(), expectedSavedAt + 1) }
+          await saveProject(project, expectedSavedAt)
         }
         await setActiveProjectId(project.id)
         if (isCancelled()) return
@@ -208,13 +218,16 @@ export function useProjectWorkspace({
         removeLegacyProject()
         skipNextAutoSaveRef.current = true
         setSaveStatus('saved')
-      } catch {
+      } catch (error) {
         if (!isCancelled()) {
           // The share fragment is already consumed, so a hydration failure
           // must still tell the user their shared link went nowhere.
           if (sharedImportPending) {
             settleSharedImport()
             setToast('Couldn’t open the shared project link')
+          } else if (error instanceof ProjectSaveConflictError) {
+            saveConflictRef.current = true
+            setToast(PROJECT_SAVE_CONFLICT_MESSAGE)
           }
           setSaveStatus('error')
         }
@@ -234,41 +247,68 @@ export function useProjectWorkspace({
 
   const saveCurrentProject = useCallback(async (showConfirmation = false) => {
     if (!persistenceReadyRef.current || projectTransitionRef.current) return false
+    if (saveConflictRef.current) {
+      if (showConfirmation) setToast(PROJECT_SAVE_CONFLICT_MESSAGE)
+      return false
+    }
 
-    const savedAt = Date.now()
     const revision = changeRevisionRef.current
     const attempt = ++saveAttemptRef.current
-    const snapshot: PersistedProject = {
+    const snapshot: Omit<PersistedProject, 'savedAt'> = {
       id: currentProjectIdRef.current,
       projectName: projectNameRef.current.trim() || DEFAULT_PROJECT_NAME,
       slides: slidesRef.current,
       uploads: uploadsRef.current,
       createdAt: currentProjectCreatedAtRef.current,
-      savedAt,
       ...(isAiRunActive() ? { interruptedGeneration: true as const } : {}),
     }
 
     setSaveStatus('saving')
     const saveRequest = saveQueueRef.current
       .catch(() => undefined)
-      .then(() => saveProject(snapshot))
-    saveQueueRef.current = saveRequest
+      .then(async () => {
+        if (currentProjectIdRef.current === snapshot.id && saveConflictRef.current) {
+          throw new ProjectSaveConflictError()
+        }
+        const expectedSavedAt = savedAtByProjectRef.current.get(snapshot.id) ?? 0
+        const savedAt = Math.max(Date.now(), expectedSavedAt + 1)
+        const committedSnapshot: PersistedProject = { ...snapshot, savedAt }
+        try {
+          await saveProject(committedSnapshot, expectedSavedAt)
+        } catch (error) {
+          if (error instanceof ProjectSaveConflictError && currentProjectIdRef.current === snapshot.id) {
+            saveConflictRef.current = true
+          }
+          throw error
+        }
+        savedAtByProjectRef.current.set(snapshot.id, savedAt)
+        return committedSnapshot
+      })
+    saveQueueRef.current = saveRequest.then(() => undefined, () => undefined)
 
     try {
-      await saveRequest
+      const committedSnapshot = await saveRequest
+      const isActiveProject = currentProjectIdRef.current === snapshot.id
       removeLegacyProject()
-      if (attempt === saveAttemptRef.current && revision === changeRevisionRef.current) {
+      if (isActiveProject && attempt === saveAttemptRef.current && revision === changeRevisionRef.current) {
         setSaveStatus('saved')
-        setLastSavedAt(savedAt)
+        setLastSavedAt(committedSnapshot.savedAt)
       }
-      setProjects((current) => upsertProjectSummary(current, snapshot))
-      if (showConfirmation) setToast('Project saved locally')
+      setProjects((current) => upsertProjectSummary(current, committedSnapshot))
+      if (showConfirmation && isActiveProject) setToast('Project saved locally')
       return true
-    } catch {
-      if (attempt === saveAttemptRef.current && revision === changeRevisionRef.current) {
+    } catch (error) {
+      const isActiveProject = currentProjectIdRef.current === snapshot.id
+      if (isActiveProject) saveFailureRevisionRef.current += 1
+      if (isActiveProject && error instanceof ProjectSaveConflictError) {
+        setSaveStatus('error')
+        setToast(PROJECT_SAVE_CONFLICT_MESSAGE)
+      } else if (isActiveProject && attempt === saveAttemptRef.current && revision === changeRevisionRef.current) {
         setSaveStatus('error')
       }
-      if (showConfirmation) setToast('Couldn’t save locally')
+      if (isActiveProject && !(error instanceof ProjectSaveConflictError) && showConfirmation) {
+        setToast('Couldn’t save locally')
+      }
       return false
     }
   }, [isAiRunActive, setToast, slidesRef, uploadsRef])
@@ -279,19 +319,30 @@ export function useProjectWorkspace({
     errorMessage: string,
   ) => {
     if (projectTransitionRef.current) return
-    const saved = await saveCurrentProject()
+    const saveFailureRevision = saveFailureRevisionRef.current
+    const conflictWasAlreadyReported = saveConflictRef.current
+    const saved = conflictWasAlreadyReported || await saveCurrentProject()
     if (!saved) {
-      setToast(errorMessage)
+      if (!saveConflictRef.current) setToast(errorMessage)
       return
     }
 
     projectTransitionRef.current = true
     try {
+      await saveQueueRef.current
+      if (saveFailureRevisionRef.current !== saveFailureRevision) {
+        setSaveStatus('error')
+        setToast(saveConflictRef.current ? PROJECT_SAVE_CONFLICT_MESSAGE : 'Couldn’t save locally')
+        return
+      }
+
       let project = await operation()
       const interrupted = consumeInterruptedGeneration(project)
       if (interrupted) {
         project = interrupted
-        await saveProject(project)
+        const expectedSavedAt = project.savedAt
+        project = { ...project, savedAt: Math.max(Date.now(), expectedSavedAt + 1) }
+        await saveProject(project, expectedSavedAt)
       }
       await setActiveProjectId(project.id)
       skipNextAutoSaveRef.current = true
@@ -299,9 +350,9 @@ export function useProjectWorkspace({
       setProjects((current) => upsertProjectSummary(current, project))
       setSaveStatus('saved')
       setToast(interrupted ? INTERRUPTED_GENERATION_MESSAGE : successMessage)
-    } catch {
+    } catch (error) {
       setSaveStatus('error')
-      setToast(errorMessage)
+      setToast(error instanceof ProjectSaveConflictError ? PROJECT_SAVE_CONFLICT_MESSAGE : errorMessage)
     } finally {
       projectTransitionRef.current = false
     }
@@ -365,10 +416,12 @@ export function useProjectWorkspace({
       const nextProject = await loadProject(nextSummary.id)
       if (!nextProject) throw new Error('Replacement project not found')
 
-      await deleteProject(currentProjectIdRef.current)
+      const deletedProjectId = currentProjectIdRef.current
+      await deleteProject(deletedProjectId)
       await setActiveProjectId(nextProject.id)
       skipNextAutoSaveRef.current = true
       replaceProject(nextProject)
+      savedAtByProjectRef.current.delete(deletedProjectId)
       setProjects((current) => current.filter((project) => project.id !== currentProjectIdRef.current))
       setSaveStatus('saved')
       setDeleteDialogOpen(false)

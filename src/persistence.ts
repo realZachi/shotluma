@@ -27,6 +27,13 @@ export type PersistedProject = {
 
 export type ProjectSummary = Pick<PersistedProject, 'id' | 'projectName' | 'createdAt' | 'savedAt'>
 
+export class ProjectSaveConflictError extends Error {
+  constructor() {
+    super('This project changed in another tab.')
+    this.name = 'ProjectSaveConflictError'
+  }
+}
+
 type SettingRecord = { key: string; value: string }
 
 export const normalizePersistedProject = (value: unknown): PersistedProject | null => {
@@ -117,7 +124,15 @@ export const loadProject = async (projectId: string): Promise<PersistedProject |
   return record ? hydrateProjectAssets(record) : null
 }
 
-export const saveProject = async (project: PersistedProject): Promise<void> => {
+/** Compare the loaded version and write in one transaction when expectedSavedAt is provided. */
+export const saveProject = async (
+  project: PersistedProject,
+  expectedSavedAt?: number,
+): Promise<void> => {
+  if (expectedSavedAt !== undefined && project.savedAt <= expectedSavedAt) {
+    throw new Error('A version-checked project save must advance savedAt.')
+  }
+
   // Image blobs are written before the document that references them, so a
   // failed save can leave an unreferenced blob but never a dangling reference.
   const record = await dehydrateProjectAssets(project)
@@ -125,10 +140,42 @@ export const saveProject = async (project: PersistedProject): Promise<void> => {
 
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(PROJECT_STORE, 'readwrite')
-    transaction.objectStore(PROJECT_STORE).put(record)
+    const store = transaction.objectStore(PROJECT_STORE)
+    let conflict = false
+
     transaction.oncomplete = () => resolve()
-    transaction.onerror = () => reject(transaction.error ?? new Error('The local project could not be saved.'))
-    transaction.onabort = () => reject(transaction.error ?? new Error('Saving the local project was cancelled.'))
+    transaction.onerror = () => {
+      if (!conflict) reject(transaction.error ?? new Error('The local project could not be saved.'))
+    }
+    transaction.onabort = () => reject(
+      conflict
+        ? new ProjectSaveConflictError()
+        : transaction.error ?? new Error('Saving the local project was cancelled.'),
+    )
+
+    const write = () => {
+      try {
+        store.put(record)
+      } catch (error) {
+        transaction.abort()
+        reject(error instanceof Error ? error : new Error('The local project could not be saved.'))
+      }
+    }
+    if (expectedSavedAt === undefined) {
+      write()
+      return
+    }
+
+    const request = store.get(project.id)
+    request.onsuccess = () => {
+      const current = normalizePersistedProject(request.result)
+      if (current?.savedAt !== expectedSavedAt) {
+        conflict = true
+        transaction.abort()
+        return
+      }
+      write()
+    }
   })
 }
 

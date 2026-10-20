@@ -8,6 +8,7 @@ import {
   loadProjectWorkspace,
   saveProject,
   setActiveProjectId,
+  ProjectSaveConflictError,
   type PersistedProject,
 } from './persistence'
 import { ASSET_STORE, PROJECT_STORE, openDatabase } from './persistence-db'
@@ -107,6 +108,32 @@ describe('blob asset persistence', () => {
     const ids = workspace.projects.map((project) => project.id)
     expect(ids.indexOf('workspace-new')).toBeLessThan(ids.indexOf('workspace-old'))
     expect(workspace.projects.every((project) => !('slides' in project))).toBe(true)
+  })
+
+  it('rejects a stale tab save without replacing the newer project', async () => {
+    const original: PersistedProject = {
+      id: 'stale-tab-project',
+      projectName: 'Project stale-tab-project',
+      slides: [makeSlide('original-slide')],
+      uploads: [],
+      createdAt: 100,
+      savedAt: 100,
+    }
+    await saveProject(original)
+
+    const staleTab = await loadProject(original.id)
+    if (!staleTab) throw new Error('the project failed to load')
+
+    await saveProject({ ...staleTab, slides: [makeSlide('newer-slide')], savedAt: 200 }, staleTab.savedAt)
+    await expect(saveProject({ ...staleTab, projectName: 'Renamed in older tab', savedAt: 300 }, staleTab.savedAt))
+      .rejects.toBeInstanceOf(ProjectSaveConflictError)
+
+    const persisted = await readRawRecord<PersistedProject>(PROJECT_STORE, original.id)
+    expect(persisted).toMatchObject({
+      projectName: original.projectName,
+      slides: [{ id: 'newer-slide' }],
+      savedAt: 200,
+    })
   })
 
   it('falls back to the most recently saved project when the configured id is stale', async () => {
