@@ -1,4 +1,4 @@
-export type SaveStatus = 'loading' | 'dirty' | 'saving' | 'saved' | 'error'
+export type SaveStatus = 'loading' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict'
 
 export const saveStatusLabels: Record<SaveStatus, string> = {
   loading: 'Loading local project …',
@@ -6,4 +6,5 @@ export const saveStatusLabels: Record<SaveStatus, string> = {
   saving: 'Saving locally …',
   saved: 'Saved locally',
   error: 'Couldn’t save',
+  conflict: 'Loaded newer version',
 }

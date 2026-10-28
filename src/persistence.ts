@@ -132,6 +132,48 @@ export const saveProject = async (project: PersistedProject): Promise<void> => {
   })
 }
 
+export type SaveConflict = { status: 'conflict'; current: PersistedProject }
+export type SaveOutcome = { status: 'saved' } | SaveConflict
+
+/**
+ * Saves only if the stored record's `savedAt` still matches `expectedSavedAt`
+ * — the value this tab last loaded or saved. A mismatch means another tab (or
+ * another load of this same project) wrote a newer version in the meantime,
+ * so this tab's in-memory snapshot is stale and must not overwrite it.
+ *
+ * The read and the conditional write happen inside one IndexedDB readwrite
+ * transaction, so no other transaction can interleave between the check and
+ * the write — unlike a separate `loadProject` followed by `saveProject`.
+ */
+export const saveProjectIfCurrent = async (
+  project: PersistedProject,
+  expectedSavedAt: number | null,
+): Promise<SaveOutcome> => {
+  const record = await dehydrateProjectAssets(project)
+  const database = await openDatabase()
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(PROJECT_STORE, 'readwrite')
+    const store = transaction.objectStore(PROJECT_STORE)
+    let outcome: SaveOutcome = { status: 'saved' }
+
+    const getRequest = store.get(project.id)
+    getRequest.onsuccess = () => {
+      const existing = normalizePersistedProject(getRequest.result)
+      if (existing && expectedSavedAt !== null && existing.savedAt !== expectedSavedAt) {
+        outcome = { status: 'conflict', current: existing }
+        return
+      }
+      store.put(record)
+    }
+    getRequest.onerror = () => reject(getRequest.error ?? new Error('The local project could not be saved.'))
+
+    transaction.oncomplete = () => resolve(outcome)
+    transaction.onerror = () => reject(transaction.error ?? new Error('The local project could not be saved.'))
+    transaction.onabort = () => reject(transaction.error ?? new Error('Saving the local project was cancelled.'))
+  })
+}
+
 export const setActiveProjectId = async (projectId: string): Promise<void> => {
   const database = await openDatabase()
 

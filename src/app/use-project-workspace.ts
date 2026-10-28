@@ -7,6 +7,7 @@ import {
   loadProjectWorkspace,
   removeLegacyProject,
   saveProject,
+  saveProjectIfCurrent,
   setActiveProjectId,
   type PersistedProject,
   type ProjectSummary,
@@ -43,6 +44,8 @@ type ProjectWorkspaceOptions = {
 
 const INTERRUPTED_GENERATION_MESSAGE =
   'The last AI generation was interrupted — finished screens were kept'
+const STALE_SAVE_CONFLICT_MESSAGE =
+  'This project changed in another tab — the newer version was loaded here'
 
 const makeNewProject = (
   projectName: string,
@@ -128,6 +131,11 @@ export function useProjectWorkspace({
   const [currentProjectId, setCurrentProjectId] = useState('current')
   const currentProjectIdRef = useRef('current')
   const currentProjectCreatedAtRef = useRef(0)
+  // The `savedAt` this tab last loaded or wrote for the current project. A
+  // save only succeeds when the stored record still carries this value —
+  // otherwise another tab (or another load) has since saved a newer version
+  // and this tab's in-memory slides/uploads are stale.
+  const knownSavedAtRef = useRef<number | null>(null)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingProject, setDeletingProject] = useState(false)
@@ -157,6 +165,7 @@ export function useProjectWorkspace({
   const replaceProject = useCallback((project: PersistedProject) => {
     currentProjectIdRef.current = project.id
     currentProjectCreatedAtRef.current = project.createdAt
+    knownSavedAtRef.current = project.savedAt
     projectNameRef.current = project.projectName
     slidesRef.current = project.slides
     uploadsRef.current = project.uploads
@@ -238,6 +247,7 @@ export function useProjectWorkspace({
     const savedAt = Date.now()
     const revision = changeRevisionRef.current
     const attempt = ++saveAttemptRef.current
+    const expectedSavedAt = knownSavedAtRef.current
     const snapshot: PersistedProject = {
       id: currentProjectIdRef.current,
       projectName: projectNameRef.current.trim() || DEFAULT_PROJECT_NAME,
@@ -251,16 +261,35 @@ export function useProjectWorkspace({
     setSaveStatus('saving')
     const saveRequest = saveQueueRef.current
       .catch(() => undefined)
-      .then(() => saveProject(snapshot))
-    saveQueueRef.current = saveRequest
+      .then(() => saveProjectIfCurrent(snapshot, expectedSavedAt))
+    saveQueueRef.current = saveRequest.then(
+      () => undefined,
+      () => undefined,
+    )
 
     try {
-      await saveRequest
+      const outcome = await saveRequest
       removeLegacyProject()
+
+      if (outcome.status === 'conflict') {
+        // Another tab saved a newer version of this exact project while this
+        // tab's save was in flight. Adopt that newer canvas instead of
+        // silently overwriting it with this tab's stale slides/uploads, and
+        // tell the user plainly rather than losing the conflict silently.
+        const fresher = await hydrateProjectAssets(outcome.current)
+        skipNextAutoSaveRef.current = true
+        replaceProject(fresher)
+        setProjects((current) => upsertProjectSummary(current, fresher))
+        setSaveStatus('conflict')
+        setToast(STALE_SAVE_CONFLICT_MESSAGE)
+        return false
+      }
+
       if (attempt === saveAttemptRef.current && revision === changeRevisionRef.current) {
         setSaveStatus('saved')
         setLastSavedAt(savedAt)
       }
+      knownSavedAtRef.current = savedAt
       setProjects((current) => upsertProjectSummary(current, snapshot))
       if (showConfirmation) setToast('Project saved locally')
       return true
@@ -271,7 +300,7 @@ export function useProjectWorkspace({
       if (showConfirmation) setToast('Couldn’t save locally')
       return false
     }
-  }, [isAiRunActive, setToast, slidesRef, uploadsRef])
+  }, [isAiRunActive, replaceProject, setToast, slidesRef, uploadsRef])
 
   const runProjectTransition = useCallback(async (
     operation: () => Promise<PersistedProject>,

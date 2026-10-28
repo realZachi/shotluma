@@ -151,7 +151,9 @@ select:focus-visible {
 .save-state--saving svg { color: var(--muted-foreground); }
 .save-state--saving svg { animation: save-pulse 1s ease-in-out infinite; }
 .save-state--error,
-.save-state--error svg { color: var(--destructive); }
+.save-state--error svg,
+.save-state--conflict,
+.save-state--conflict svg { color: var(--destructive); }
 @keyframes save-pulse { 50% { opacity: .4; } }
 
 .isolate.z-50:has(> [data-slot='select-content']),

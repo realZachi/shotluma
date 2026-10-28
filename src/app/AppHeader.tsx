@@ -253,7 +253,7 @@ export function AppHeader({
               : undefined}
             aria-live="polite"
           >
-            {saveStatus === 'error' ? <AlertCircle size={13} /> : <Cloud size={13} />}
+            {saveStatus === 'error' || saveStatus === 'conflict' ? <AlertCircle size={13} /> : <Cloud size={13} />}
             {saveStatusLabels[saveStatus]}
           </span>
           <div className="project-switcher">
