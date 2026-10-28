@@ -134,12 +134,16 @@ Developer AI run logging is enabled only when `SHOTLUMA_AI_LOGGING=true`. The br
 
 `src/app/use-slide-export.ts` uses `html-to-image` to rasterize each artboard and JSZip to package the results. Output definitions live in `src/app/export-formats.ts`.
 
-Supported output sizes are:
+Supported output sizes are every iPhone display category App Store Connect
+accepts within the artboard's portrait aspect ratio family (Dynamic Island and
+Face ID devices):
 
 | Target | Dimensions |
 | --- | --- |
-| 6.9-inch display | `1290 × 2796` |
-| 6.5-inch display | `1242 × 2688` |
+| 6.9-inch display | `1320 × 2868` or `1290 × 2796` |
+| 6.5-inch display | `1284 × 2778` or `1242 × 2688` |
+| 6.1-inch display | `1179 × 2556` |
+| 5.8-inch display | `1170 × 2532` |
 
 The rendered artboard is the source of truth. Editor-only UI, including transform handles, selections, and elements carrying `data-ai-overlay`, must be filtered out of export.
 

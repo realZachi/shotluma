@@ -28,7 +28,7 @@ Projects live entirely in your browser — no Shotluma account or project backen
 - **Direct manipulation** — typography, gradients, shapes, images, mockups, alignment, stacking, and spacing are all hand-editable, with or without AI.
 - **Perspective device mockups** — drop a raw screenshot into a device frame with correct 3D geometry.
 - **Local-first** — projects and uploads are stored in IndexedDB in your browser.
-- **Store-ready export** — download the whole set as `1290 × 2796` or `1242 × 2688` PNGs in one ZIP.
+- **Store-ready export** — download the whole set as PNGs in one ZIP, at any accepted App Store Connect iPhone screenshot size from 5.8-inch up to 6.9-inch.
 
 ## Refine one screen with AI
 
