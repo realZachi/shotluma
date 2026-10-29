@@ -124,13 +124,22 @@ const appendRichTextChildren = (source: Node, target: Node) => {
   })
 }
 
+const isBrElement = (node: ChildNode | null): node is Element =>
+  node !== null && node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName === 'BR'
+
 export function sanitizeRichText(input: string): string {
   const parsed = new DOMParser().parseFromString(input, 'text/html')
   const output = document.createElement('div')
   appendRichTextChildren(parsed.body, output)
 
-  while (output.lastElementChild?.tagName === 'BR') {
-    output.lastElementChild.remove()
+  // `lastElementChild` skips trailing text nodes, so it would find and strip a <br>
+  // that still has real plain text after it (e.g. "Hello<br>World") as if it were a
+  // trailing empty line. Walk the actual last child node instead, so only a <br>
+  // genuinely at the end of the content is trimmed.
+  let trailingBr = output.lastChild
+  while (isBrElement(trailingBr)) {
+    trailingBr.remove()
+    trailingBr = output.lastChild
   }
 
   return output.innerHTML
