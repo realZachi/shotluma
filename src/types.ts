@@ -141,3 +141,5 @@ export type UploadAsset = {
 export type TemplateId = 'ink' | 'paper' | 'lime' | 'coral'
 
 export type TextPreset = 'title' | 'subtitle' | 'body' | 'label' | 'quote' | 'stat'
+
+export type TextStylePresetId = 'plain' | 'pill' | 'card' | 'highlight' | 'outline'

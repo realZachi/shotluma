@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { fontOptions } from '../data'
 import { deviceOptions, getDevicePlacement } from '../mockups/catalog'
+import { getTextStylePresetPatch, textStylePresetOptions } from '../text-style-presets'
 import {
   AlignCenter,
   AlignLeft,
@@ -16,6 +17,7 @@ import {
   Lock,
   LockOpen,
   MonitorSmartphone,
+  Palette,
   Shapes,
   SlidersHorizontal,
   Sparkles,
@@ -287,6 +289,36 @@ const MoreSettings = ({ element, onUpdate }: Pick<Props, 'element' | 'onUpdate'>
   </Popover>
 )
 
+const TextStylePresetControl = ({ element, onUpdate }: {
+  element: Extract<CanvasElement, { type: 'text' }>
+  onUpdate: Props['onUpdate']
+}) => (
+  <Popover>
+    <PopoverTrigger render={<Button variant="outline" size="sm" className="toolbar-control-trigger" aria-label="Text style preset" />}>
+      <Palette size={14} />
+      <span>Style</span>
+      <ChevronDown className="toolbar-control-chevron" />
+    </PopoverTrigger>
+    <PopoverContent align="start" sideOffset={9} className="toolbar-control-popover">
+      <PopoverHeader>
+        <PopoverTitle>Text style</PopoverTitle>
+      </PopoverHeader>
+      <div className="toolbar-range-presets" aria-label="Text style presets">
+        {textStylePresetOptions.map((preset) => (
+          <Button
+            key={preset.id}
+            variant="outline"
+            size="sm"
+            onClick={() => onUpdate(getTextStylePresetPatch(element, preset.id))}
+          >
+            {preset.label}
+          </Button>
+        ))}
+      </div>
+    </PopoverContent>
+  </Popover>
+)
+
 const TextControls = ({ element, onUpdate }: { element: Extract<CanvasElement, { type: 'text' }>; onUpdate: Props['onUpdate'] }) => {
   const isBold = element.fontWeight >= 700
   const fontCategories = [...new Set(fontOptions.map((font) => font.category))]
@@ -315,6 +347,7 @@ const TextControls = ({ element, onUpdate }: { element: Extract<CanvasElement, {
           ))}
         </SelectContent>
       </Select>
+      <TextStylePresetControl element={element} onUpdate={onUpdate} />
       <ToolbarRange
         label="Size"
         value={element.fontSize}

@@ -36,6 +36,24 @@ export const hexToRgba = (hex: string, alpha: number) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+/**
+ * Picks a readable near-black or near-white foreground for a solid hex
+ * background, using a standard perceptual luma weighting. Falls back to the
+ * dark editor chrome color for unparseable input instead of throwing, since
+ * this feeds live style presets rather than validated form input.
+ */
+export const getContrastTextColor = (hex: string): string => {
+  const normalized = hex.replace('#', '')
+  const expanded = normalized.length === 3 ? normalized.split('').map((c) => c + c).join('') : normalized
+  if (!/^[0-9a-f]{6}$/i.test(expanded)) return '#111116'
+  const bigint = Number.parseInt(expanded, 16)
+  const r = (bigint >> 16) & 255
+  const g = (bigint >> 8) & 255
+  const b = bigint & 255
+  const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luma > 0.6 ? '#111116' : '#ffffff'
+}
+
 export const getBackgroundStyle = (background: Background): CSSProperties => {
   if (background.type === 'image') {
     const overlay = hexToRgba(background.overlayColor ?? '#111116', clamp(background.overlayOpacity ?? 0.18, 0, 1))
