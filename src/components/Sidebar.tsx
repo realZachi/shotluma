@@ -130,7 +130,7 @@ const ElementsPanel = ({ onAddShape }: {
                 shape: shape.id,
                 color: '#292923',
                 strokeColor: '#292923',
-                strokeWidth: ['line', 'arrow', 'wave', 'ring'].includes(shape.id) ? 7 : 0,
+                strokeWidth: ['line', 'arrow', 'wave', 'ring', 'checkmark'].includes(shape.id) ? 7 : 0,
                 shadow: 0,
               }
               return (

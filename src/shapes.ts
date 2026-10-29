@@ -11,16 +11,26 @@ export const shapeCatalog: {
   { id: 'pill', label: 'Pill', group: 'Base' },
   { id: 'triangle', label: 'Triangle', group: 'Base' },
   { id: 'diamond', label: 'Diamond', group: 'Base' },
+  { id: 'hexagon', label: 'Hexagon', group: 'Base' },
   { id: 'star', label: 'Star', group: 'Accent' },
   { id: 'burst', label: 'Burst', group: 'Accent' },
   { id: 'spark', label: 'Spark', group: 'Accent' },
   { id: 'blob', label: 'Blob', group: 'Accent' },
   { id: 'arch', label: 'Arch', group: 'Accent' },
   { id: 'ring', label: 'Ring', group: 'Accent' },
+  { id: 'chevron', label: 'Chevron', group: 'Accent' },
+  { id: 'speech-bubble', label: 'Speech bubble', group: 'Accent' },
+  { id: 'checkmark', label: 'Checkmark', group: 'Accent' },
   { id: 'line', label: 'Line', group: 'Lines' },
   { id: 'arrow', label: 'Arrow', group: 'Lines' },
   { id: 'wave', label: 'Wave', group: 'Lines' },
 ]
+
+// `ShapeGraphic` draws these as a single colored line with no fill, so their
+// visible color comes from `color` (the toolbar's "Fill"/"Color" swatch) —
+// `strokeColor` is never read for them. The toolbar must not offer a separate
+// "Stroke" color control for these shapes; it would silently do nothing.
+export const strokeOnlyShapes: ReadonlySet<ShapeElement['shape']> = new Set(['ring', 'line', 'arrow', 'wave', 'checkmark'])
 
 export const shapeAspectRatio: Record<ShapeElement['shape'], number> = {
   circle: 1,
@@ -38,4 +48,8 @@ export const shapeAspectRatio: Record<ShapeElement['shape'], number> = {
   line: 4,
   arrow: 2.4,
   wave: 3.2,
+  hexagon: 1,
+  chevron: 1,
+  'speech-bubble': 1.2,
+  checkmark: 1.3,
 }

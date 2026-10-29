@@ -49,6 +49,10 @@ export const shapeSchema = z.enum([
   'line',
   'arrow',
   'wave',
+  'hexagon',
+  'chevron',
+  'speech-bubble',
+  'checkmark',
 ])
 
 export const iconSchema = z

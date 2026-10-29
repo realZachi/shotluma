@@ -103,7 +103,7 @@ export const createMediaTools = ({ controller, emit }: ToolContext) => {
       shape: shapeSchema,
       color: z.string().describe('Shape color as a hex string.'),
       strokeColor: z.string().optional().describe('Outline color for filled shapes as a hex string.'),
-      strokeWidth: z.number().optional().describe('Outline width, or line thickness for line/ring/arrow/wave, 0-12.'),
+      strokeWidth: z.number().optional().describe('Outline width, or line thickness for line/ring/arrow/wave/checkmark, 0-12.'),
       shadow: z.number().optional().describe('Drop shadow intensity, 0-100.'),
       x: z.number().describe(COORDINATE_NOTE),
       y: z.number().describe(COORDINATE_NOTE),
@@ -125,7 +125,7 @@ export const createMediaTools = ({ controller, emit }: ToolContext) => {
       opacity,
     }) => {
       if (!getSlide(controller, slideId)) return notFound(slideNotFoundMessage(slideId))
-      const defaultStrokeWidth = ['line', 'arrow', 'wave'].includes(shape)
+      const defaultStrokeWidth = ['line', 'arrow', 'wave', 'checkmark'].includes(shape)
         ? 6
         : shape === 'ring' ? 4 : 0
       const element: Omit<ShapeElement, 'id'> = {

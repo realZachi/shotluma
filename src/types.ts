@@ -98,6 +98,10 @@ export type ShapeElement = BaseElement & {
     | 'line'
     | 'arrow'
     | 'wave'
+    | 'hexagon'
+    | 'chevron'
+    | 'speech-bubble'
+    | 'checkmark'
   color: string
   strokeColor?: string
   strokeWidth?: number

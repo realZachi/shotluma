@@ -205,7 +205,7 @@ export function useEditorActions({
       shape,
       color: '#d8ff55',
       strokeColor: '#171713',
-      strokeWidth: ['line', 'arrow', 'wave'].includes(shape) ? 6 : shape === 'ring' ? 4 : 0,
+      strokeWidth: ['line', 'arrow', 'wave', 'checkmark'].includes(shape) ? 6 : shape === 'ring' ? 4 : 0,
       shadow: 14,
     }, 'elements')
   }, [addElement])

@@ -48,6 +48,15 @@ export const ShapeGraphic = ({ element, className = '' }: { element: ShapeElemen
       {element.shape === 'line' && <path d="M5 50H95" fill="none" stroke={element.color} strokeWidth={lineWidth} strokeLinecap="round" />}
       {element.shape === 'arrow' && <path d="M7 50H82M62 27L85 50L62 73" fill="none" stroke={element.color} strokeWidth={lineWidth} strokeLinecap="round" strokeLinejoin="round" />}
       {element.shape === 'wave' && <path d="M2 54C14 24 26 24 38 54S62 84 74 54S88 24 98 50" fill="none" stroke={element.color} strokeWidth={lineWidth} strokeLinecap="round" />}
+      {element.shape === 'hexagon' && <polygon points="73,11 27,11 5,50 27,89 73,89 95,50" {...fill} />}
+      {element.shape === 'chevron' && <polygon points="20,10 45,10 80,50 45,90 20,90 55,50" {...fill} />}
+      {element.shape === 'speech-bubble' && (
+        <path
+          d="M21,8 L79,8 A16,16 0 0 1 95,24 L95,54 A16,16 0 0 1 79,70 L42,70 L22,92 L22,70 L21,70 A16,16 0 0 1 5,54 L5,24 A16,16 0 0 1 21,8 Z"
+          {...fill}
+        />
+      )}
+      {element.shape === 'checkmark' && <path d="M18 52L40 74L84 26" fill="none" stroke={element.color} strokeWidth={lineWidth} strokeLinecap="round" strokeLinejoin="round" />}
     </svg>
   )
 }
