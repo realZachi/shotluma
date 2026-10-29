@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { fontOptions } from '../data'
 import { deviceOptions, getDevicePlacement } from '../mockups/catalog'
+import { strokeOnlyShapes } from '../shapes'
 import {
   AlignCenter,
   AlignLeft,
@@ -235,7 +236,13 @@ const ShapeSettings = ({ element, onUpdate }: {
 }) => (
   <div className="toolbar-popover-section">
     <strong className="toolbar-popover-heading">Shape details</strong>
-    <ToolbarColor label="Stroke" value={element.strokeColor ?? '#171713'} onChange={(strokeColor) => onUpdate({ strokeColor })} />
+    {/* `ShapeGraphic` never reads `strokeColor` for these line-only shapes
+        (their visible color is `color`, shown as "Fill"/"Color" in the main
+        toolbar), so this picker must stay hidden here or it silently does
+        nothing. */}
+    {!strokeOnlyShapes.has(element.shape) && (
+      <ToolbarColor label="Stroke" value={element.strokeColor ?? '#171713'} onChange={(strokeColor) => onUpdate({ strokeColor })} />
+    )}
     <AdvancedSlider label="Stroke width" value={element.strokeWidth ?? 0} min={0} max={12} displayValue={`${element.strokeWidth ?? 0} px`} onChange={(strokeWidth) => onUpdate({ strokeWidth })} />
     <AdvancedSlider label="Shadow" value={element.shadow ?? 0} min={0} max={100} displayValue={`${element.shadow ?? 0}%`} onChange={(shadow) => onUpdate({ shadow })} />
   </div>
@@ -434,8 +441,17 @@ export const ElementToolbar = ({ element, onUpdate, onUploadToDevice, onDuplicat
         {element.type === 'text' && <TextControls element={element} onUpdate={onUpdate} />}
         {element.type === 'shape' && (
           <>
-            <ToolbarColor label="Fill" value={element.color} onChange={(color) => onUpdate({ color })} />
-            <ToolbarColor label="Stroke" value={element.strokeColor ?? '#171713'} onChange={(strokeColor) => onUpdate({ strokeColor })} />
+            <ToolbarColor
+              label={strokeOnlyShapes.has(element.shape) ? 'Color' : 'Fill'}
+              value={element.color}
+              onChange={(color) => onUpdate({ color })}
+            />
+            {/* `ShapeGraphic` renders ring/line/arrow/wave as a single
+                colored line using `color` only; `strokeColor` is never read
+                for them, so this picker would silently do nothing. */}
+            {!strokeOnlyShapes.has(element.shape) && (
+              <ToolbarColor label="Stroke" value={element.strokeColor ?? '#171713'} onChange={(strokeColor) => onUpdate({ strokeColor })} />
+            )}
             <ToolbarRange
               label="Stroke"
               value={element.strokeWidth ?? 0}

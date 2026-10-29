@@ -22,6 +22,12 @@ export const shapeCatalog: {
   { id: 'wave', label: 'Wave', group: 'Lines' },
 ]
 
+// `ShapeGraphic` draws these as a single colored line with no fill, so their
+// visible color comes from `color` (the toolbar's "Fill"/"Color" swatch) —
+// `strokeColor` is never read for them. The toolbar must not offer a separate
+// "Stroke" color control for these shapes; it would silently do nothing.
+export const strokeOnlyShapes: ReadonlySet<ShapeElement['shape']> = new Set(['ring', 'line', 'arrow', 'wave'])
+
 export const shapeAspectRatio: Record<ShapeElement['shape'], number> = {
   circle: 1,
   square: 1,
