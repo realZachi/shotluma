@@ -15,6 +15,7 @@ import {
   Shapes,
   Sparkles,
   StartUp02,
+  Trash2,
   Type,
   Upload,
 } from './icons'
@@ -309,11 +310,12 @@ const BackgroundPanel = ({ background, uploads, onUpdate, onUploadBackground }: 
   )
 }
 
-const UploadsPanel = ({ uploads, onUpload, onAddImage, onSetDeviceImage }: {
+const UploadsPanel = ({ uploads, onUpload, onAddImage, onSetDeviceImage, onRemoveUpload }: {
   uploads: UploadAsset[]
   onUpload: (files: FileList) => void
   onAddImage: (asset: UploadAsset) => void
   onSetDeviceImage: (asset: UploadAsset) => void
+  onRemoveUpload: (asset: UploadAsset) => void
 }) => {
   const inputRef = useRef<HTMLInputElement>(null)
   const handleFiles = (event: ChangeEvent<HTMLInputElement>) => event.target.files && onUpload(event.target.files)
@@ -328,7 +330,14 @@ const UploadsPanel = ({ uploads, onUpload, onAddImage, onSetDeviceImage }: {
               {uploads.map((asset) => (
                 <div className="upload-asset" key={asset.id}>
                   <img src={asset.src} alt={asset.name} />
-                  <div><strong>{asset.name}</strong><span><button onClick={() => onSetDeviceImage(asset)}>Use in mockup</button><button onClick={() => onAddImage(asset)}>Add to canvas</button></span></div>
+                  <div>
+                    <strong>{asset.name}</strong>
+                    <span>
+                      <button onClick={() => onSetDeviceImage(asset)}>Use in mockup</button>
+                      <button onClick={() => onAddImage(asset)}>Add to canvas</button>
+                      <button title="Remove upload" aria-label="Remove upload" onClick={() => onRemoveUpload(asset)}><Trash2 size={11} /></button>
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -352,9 +361,10 @@ type PropertiesPanelProps = {
   onUploadBackground: (file: File) => void
   onAddImage: (asset: UploadAsset) => void
   onSetDeviceImage: (asset: UploadAsset) => void
+  onRemoveUpload: (asset: UploadAsset) => void
 }
 
-export const PropertiesPanel = ({ activeTool, activeSlide, uploads, onApplyTemplate, onAddText, onAddDevice, onAddShape, onAddIcon, onUpdateBackground, onUploadFiles, onUploadBackground, onAddImage, onSetDeviceImage }: PropertiesPanelProps) => (
+export const PropertiesPanel = ({ activeTool, activeSlide, uploads, onApplyTemplate, onAddText, onAddDevice, onAddShape, onAddIcon, onUpdateBackground, onUploadFiles, onUploadBackground, onAddImage, onSetDeviceImage, onRemoveUpload }: PropertiesPanelProps) => (
   <aside className="properties-panel" id="properties-panel">
     <div className="panel-scroll">
       {activeTool === 'templates' && <TemplatesPanel onApplyTemplate={onApplyTemplate} />}
@@ -375,7 +385,7 @@ export const PropertiesPanel = ({ activeTool, activeSlide, uploads, onApplyTempl
       )}
       {activeTool === 'device' && <DevicePanel onAddDevice={onAddDevice} />}
       {activeTool === 'background' && <BackgroundPanel background={activeSlide.background} uploads={uploads} onUpdate={onUpdateBackground} onUploadBackground={onUploadBackground} />}
-      {activeTool === 'uploads' && <UploadsPanel uploads={uploads} onUpload={onUploadFiles} onAddImage={onAddImage} onSetDeviceImage={onSetDeviceImage} />}
+      {activeTool === 'uploads' && <UploadsPanel uploads={uploads} onUpload={onUploadFiles} onAddImage={onAddImage} onSetDeviceImage={onSetDeviceImage} onRemoveUpload={onRemoveUpload} />}
     </div>
     <div className="panel-footer"><span><i /> Auto-save</span><small>Everything stays local</small></div>
   </aside>

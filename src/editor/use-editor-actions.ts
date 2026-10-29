@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { isUploadReferenced } from '../asset-sources'
 import { importBlobAsset } from '../asset-store'
 import { makeTemplate } from '../data'
 import { getDevicePlacement } from '../mockups/catalog'
@@ -267,6 +268,15 @@ export function useEditorActions({
       : slide))
   }, [activeSlide, activeSlideId, addElement, commit, selectedElement, setActiveTool, setSelectedElementId])
 
+  const removeUpload = useCallback((asset: UploadAsset) => {
+    if (isUploadReferenced(asset, slides)) {
+      setToast('Remove it from the screen first')
+      return
+    }
+    setUploads((current) => current.filter((item) => item.id !== asset.id))
+    setToast('Upload removed')
+  }, [setToast, setUploads, slides])
+
   const uploadFiles = useCallback(async (files: FileList) => {
     const accepted = Array.from(files).filter((file) => file.type.startsWith('image/'))
     const assets = await Promise.all(accepted.map(async (file) => ({
@@ -447,6 +457,7 @@ export function useEditorActions({
     addDevice,
     addImage,
     setDeviceImage,
+    removeUpload,
     uploadFiles,
     uploadToSelectedDevice,
     uploadBackgroundImage,

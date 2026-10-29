@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { collectAssetSources, mapAssetSources } from './asset-sources'
+import { collectAssetSources, isUploadReferenced, mapAssetSources } from './asset-sources'
 import type { Slide, UploadAsset } from './types'
 
 const makeSlide = (overrides: Partial<Slide> = {}): Slide => ({
@@ -71,5 +71,30 @@ describe('mapAssetSources', () => {
     expect(partial.slides[0]?.background).toBe(project.slides[0]?.background)
     expect(partial.slides[0]?.elements[1]).toBe(project.slides[0]?.elements[1])
     expect(partial.slides[0]?.elements[2]).toBe(project.slides[0]?.elements[2])
+  })
+})
+
+describe('isUploadReferenced', () => {
+  it('is true when the upload src is placed directly on a canvas element', () => {
+    const { slides } = projectFixture()
+    expect(isUploadReferenced(makeUpload('data:image/png;base64,AAA'), slides)).toBe(true)
+  })
+
+  it('is true when the upload src is used as a background image', () => {
+    const slides = [makeSlide({
+      background: { type: 'image', color1: '#000', color2: '#000', angle: 0, image: 'data:image/png;base64,BBB' },
+    })]
+    expect(isUploadReferenced(makeUpload('data:image/png;base64,BBB'), slides)).toBe(true)
+  })
+
+  it('is true when an AI-authored HTML screen references the upload by id, not src', () => {
+    const slides = [makeSlide({ html: '<img src="asset:upload-1">' })]
+    expect(isUploadReferenced(makeUpload('data:image/png;base64,AAA'), slides)).toBe(true)
+  })
+
+  it('is false for an upload that appears nowhere in any slide', () => {
+    const { slides } = projectFixture()
+    expect(isUploadReferenced(makeUpload('data:image/png;base64,UNUSED'), slides)).toBe(false)
+    expect(isUploadReferenced(makeUpload('data:image/png;base64,UNUSED'), [])).toBe(false)
   })
 })

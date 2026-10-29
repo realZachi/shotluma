@@ -296,6 +296,7 @@ export default function App() {
             }}
             onAddImage={actions.addImage}
             onSetDeviceImage={actions.setDeviceImage}
+            onRemoveUpload={actions.removeUpload}
           />
         )}
         <EditorCanvas

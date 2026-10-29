@@ -1,3 +1,4 @@
+import { collectAssetReferences } from './html-slide/assets'
 import type { CanvasElement, Slide, UploadAsset } from './types'
 
 /**
@@ -62,4 +63,17 @@ export const mapAssetSources = <T extends ProjectAssetSources>(project: T, map: 
   })
   const slides = project.slides.map((slide) => mapSlideSources(slide, map))
   return { ...project, uploads, slides }
+}
+
+/**
+ * True when `upload` is placed somewhere in `slides` — directly on a canvas
+ * element/background, or by an `asset:<id>` reference inside an AI-authored
+ * HTML screen (those screens don't carry the image source itself, so
+ * `collectAssetSources` can't see this usage; only the upload's own id
+ * reveals it). Used to guard upload removal so deleting an upload never
+ * leaves a slide pointing at a source that no longer exists.
+ */
+export const isUploadReferenced = (upload: UploadAsset, slides: Slide[]): boolean => {
+  if (collectAssetSources({ slides, uploads: [] }).has(upload.src)) return true
+  return slides.some((slide) => slide.html !== undefined && collectAssetReferences(slide.html).includes(upload.id))
 }
