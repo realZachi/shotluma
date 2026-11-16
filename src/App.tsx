@@ -247,6 +247,8 @@ export default function App() {
         onCreateProject={() => guardProjectAction(project.createNewProject)}
         onDuplicateProject={() => guardProjectAction(project.duplicateCurrentProject)}
         onShareProject={() => setShareDialogOpen(true)}
+        onExportProjectJson={() => void project.exportCurrentProjectJson()}
+        onImportProjectJson={(file) => guardProjectAction(() => void project.importProjectFromFile(file))}
         onSaveProject={() => void project.saveCurrentProject(true)}
         onRequestProjectDeletion={() => project.setDeleteDialogOpen(true)}
         onUndo={history.undo}
