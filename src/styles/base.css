@@ -371,6 +371,9 @@ button:disabled { cursor: not-allowed; opacity: .35; }
 .device-swatch { width: 76px; height: 66px; border-radius: 4px; background-position: center; background-size: contain; background-repeat: no-repeat; }
 .device-swatch i { display: none; }
 .upload-drop { width: 100%; min-height: 62px; display: grid; grid-template-columns: 42px 1fr; align-items: center; text-align: left; gap: 8px; border: 1px dashed #bcbcb2; background: #eeede7; border-radius: 8px; padding: 8px; cursor: pointer; overflow: hidden; }
+.upload-drop:hover,
+.upload-drop.is-drag-active { background: #e8e7e0; border-color: #9d9d92; }
+.upload-drop.is-drag-active { border-style: solid; }
 .upload-drop > img { width: 42px; height: 46px; object-fit: cover; border-radius: 4px; }
 .upload-drop > svg { margin: auto; color: #74746b; }
 .upload-drop > span { display: flex; flex-direction: column; }
@@ -412,6 +415,9 @@ button:disabled { cursor: not-allowed; opacity: .35; }
 .pattern--waves::after { background-image: radial-gradient(ellipse at 50% 100%, transparent 55%, var(--pattern-color) 57%, transparent 61%); background-size: var(--pattern-size) calc(var(--pattern-size) * .55); }
 
 .large-upload { width: 100%; min-height: 112px; border: 1px dashed #b8b8ae; background: #efeee8; border-radius: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
+.large-upload:hover,
+.large-upload.is-drag-active { background: #e8e7e0; border-color: #9d9d92; }
+.large-upload.is-drag-active { border-style: solid; }
 .large-upload > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: #20201c; color: white; margin-bottom: 7px; }
 .large-upload strong { font-size: 10px; }
 .large-upload small { font-size: 8px; color: #8f8f86; margin-top: 3px; }

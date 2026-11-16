@@ -267,7 +267,7 @@ export function useEditorActions({
       : slide))
   }, [activeSlide, activeSlideId, addElement, commit, selectedElement, setActiveTool, setSelectedElementId])
 
-  const uploadFiles = useCallback(async (files: FileList) => {
+  const uploadFiles = useCallback(async (files: FileList | File[]) => {
     const accepted = Array.from(files).filter((file) => file.type.startsWith('image/'))
     const assets = await Promise.all(accepted.map(async (file) => ({
       id: uid('upload'),
