@@ -981,6 +981,10 @@ select:focus-visible {
   background: var(--muted);
 }
 
+.large-upload:hover,
+.large-upload.is-drag-active,
+.upload-drop:hover,
+.upload-drop.is-drag-active,
 .ai-modal-dropzone:hover,
 .ai-modal-dropzone--active {
   background: var(--accent);

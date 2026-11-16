@@ -2,7 +2,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type DragEvent,
   type RefObject,
 } from 'react'
 import {
@@ -47,6 +46,7 @@ import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Switch } from './ui/switch'
 import { Textarea } from './ui/textarea'
+import { useImageDropzone } from './use-image-dropzone'
 import type { AiEditorController } from '../ai/controller'
 import type { PlannedScreen } from '../ai/run-plan'
 
@@ -119,53 +119,14 @@ const ImageDropzone = ({
   onFiles,
   variant = 'banner',
 }: ImageDropzoneProps) => {
-  const [isDragging, setIsDragging] = useState(false)
-  const dragDepthRef = useRef(0)
-
-  const resetDragState = () => {
-    dragDepthRef.current = 0
-    setIsDragging(false)
-  }
-
-  const handleDragEnter = (event: DragEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    dragDepthRef.current += 1
-    if (Array.from(event.dataTransfer.types).includes('Files')) {
-      setIsDragging(true)
-    }
-  }
-
-  const handleDragLeave = (event: DragEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    dragDepthRef.current -= 1
-    if (dragDepthRef.current <= 0) resetDragState()
-  }
-
-  const handleDragOver = (event: DragEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    event.dataTransfer.dropEffect = 'copy'
-  }
-
-  const handleDrop = (event: DragEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    resetDragState()
-    const files = filterAcceptedImageFiles(event.dataTransfer.files)
-    if (files.length > 0) onFiles(files)
-  }
+  const { isDragging, dropzoneProps } = useImageDropzone(onFiles)
 
   return (
     <button
       type="button"
       className={`ai-modal-dropzone ai-modal-dropzone--${variant}${isDragging ? ' ai-modal-dropzone--active' : ''}`}
       onClick={() => inputRef.current?.click()}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
+      {...dropzoneProps}
       aria-label={label}
     >
       {variant === 'add' ? <Plus size={16} /> : <Upload size={16} />}

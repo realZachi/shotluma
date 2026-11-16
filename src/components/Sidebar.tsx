@@ -19,6 +19,7 @@ import {
   Upload,
 } from './icons'
 import { ShapeGraphic } from './ShapeGraphic'
+import { useImageDropzone } from './use-image-dropzone'
 import type { Background, BackgroundPattern, CanvasElement, ShapeElement, Slide, TemplateId, TextPreset, ToolId, UploadAsset } from '../types'
 
 const tools: { id: ToolId; label: string; icon: ReactNode }[] = [
@@ -199,6 +200,9 @@ const BackgroundFillControls = ({
   onUploadBackground: (file: File) => void
 }) => {
   const inputRef = useRef<HTMLInputElement>(null)
+  const { isDragging, dropzoneProps } = useImageDropzone((files) => {
+    if (files[0]) onUploadBackground(files[0])
+  })
 
   return (
     <Section title="Fill">
@@ -222,9 +226,14 @@ const BackgroundFillControls = ({
       {background.type === 'image' && (
         <div className="background-image-controls">
           <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => event.target.files?.[0] && onUploadBackground(event.target.files[0])} />
-          <button className="upload-drop background-upload" onClick={() => inputRef.current?.click()}>
+          <button
+            type="button"
+            className={`upload-drop background-upload${isDragging ? ' is-drag-active' : ''}`}
+            onClick={() => inputRef.current?.click()}
+            {...dropzoneProps}
+          >
             {background.image ? <img src={background.image} alt="Current background" /> : <ImagePlus size={20} />}
-            <span><strong>{background.image ? 'Replace background' : 'Upload background'}</strong><small>PNG, JPG, or WebP</small></span>
+            <span><strong>{background.image ? 'Replace background' : 'Upload background'}</strong><small>Drag or click · PNG, JPG, or WebP</small></span>
           </button>
           {uploads.length > 0 && (
             <div className="background-asset-grid">
@@ -311,17 +320,32 @@ const BackgroundPanel = ({ background, uploads, onUpdate, onUploadBackground }: 
 
 const UploadsPanel = ({ uploads, onUpload, onAddImage, onSetDeviceImage }: {
   uploads: UploadAsset[]
-  onUpload: (files: FileList) => void
+  onUpload: (files: FileList | File[]) => void
   onAddImage: (asset: UploadAsset) => void
   onSetDeviceImage: (asset: UploadAsset) => void
 }) => {
   const inputRef = useRef<HTMLInputElement>(null)
-  const handleFiles = (event: ChangeEvent<HTMLInputElement>) => event.target.files && onUpload(event.target.files)
+  const { isDragging, dropzoneProps } = useImageDropzone(onUpload)
+  const handleFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      onUpload(event.target.files)
+      event.target.value = ''
+    }
+  }
   return (
     <>
       <div className="panel-heading"><div><span>MEDIA</span><h2>Uploads</h2></div><p>App screenshots and images stay local in your browser.</p></div>
       <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={handleFiles} />
-      <button className="large-upload" onClick={() => inputRef.current?.click()}><span><Upload size={20} /></span><strong>Upload files</strong><small>PNG, JPG, or WebP · select multiple</small></button>
+      <button
+        type="button"
+        className={`large-upload${isDragging ? ' is-drag-active' : ''}`}
+        onClick={() => inputRef.current?.click()}
+        {...dropzoneProps}
+      >
+        <span><Upload size={20} /></span>
+        <strong>Upload files</strong>
+        <small>Drag &amp; drop or click · PNG, JPG, WebP</small>
+      </button>
       {uploads.length
         ? (
             <div className="upload-list">
@@ -348,7 +372,7 @@ type PropertiesPanelProps = {
   onAddShape: (shape: ShapeElement['shape']) => void
   onAddIcon: (iconId: string) => void
   onUpdateBackground: (patch: Partial<Background>) => void
-  onUploadFiles: (files: FileList) => void
+  onUploadFiles: (files: FileList | File[]) => void
   onUploadBackground: (file: File) => void
   onAddImage: (asset: UploadAsset) => void
   onSetDeviceImage: (asset: UploadAsset) => void
