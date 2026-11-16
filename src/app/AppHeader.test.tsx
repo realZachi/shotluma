@@ -48,6 +48,8 @@ const headerProps = {
   onCreateProject: () => undefined,
   onDuplicateProject: () => undefined,
   onShareProject: () => undefined,
+  onExportProjectJson: () => undefined,
+  onImportProjectJson: () => undefined,
   onSaveProject: () => undefined,
   onRequestProjectDeletion: () => undefined,
   onUndo: () => undefined,
@@ -86,6 +88,8 @@ describe('App header', () => {
     )
 
     expect(markup).toContain('Share as link')
+    expect(markup).toContain('Export JSON')
+    expect(markup).toContain('Import JSON')
   })
 
   it('disables the new-project button until persistence is ready', () => {

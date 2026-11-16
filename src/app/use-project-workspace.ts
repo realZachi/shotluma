@@ -12,6 +12,7 @@ import {
   type ProjectSummary,
 } from '../persistence'
 import { uid } from '../utils'
+import { downloadProjectJson, exportProjectJson, parseProjectJson } from './project-file'
 import {
   consumeInterruptedGeneration,
   DEFAULT_PROJECT_NAME,
@@ -353,6 +354,42 @@ export function useProjectWorkspace({
     }, 'Project duplicated', 'Couldn’t duplicate project')
   }, [projects, runProjectTransition, slidesRef, uploadsRef])
 
+  const exportCurrentProjectJson = useCallback(async () => {
+    const projectNameToExport = projectNameRef.current.trim() || DEFAULT_PROJECT_NAME
+    try {
+      const json = await exportProjectJson({
+        projectName: projectNameToExport,
+        slides: slidesRef.current,
+        uploads: uploadsRef.current,
+      })
+      downloadProjectJson(projectNameToExport, json)
+      setToast('Project exported as JSON')
+    } catch {
+      setToast('Couldn’t export project')
+    }
+  }, [setToast, slidesRef, uploadsRef])
+
+  const importProjectFromFile = useCallback(async (file: File) => {
+    try {
+      const parsed = parseProjectJson(await file.text())
+      if (!parsed) {
+        setToast('Couldn’t import project — invalid JSON file')
+        return
+      }
+      const imported = makeNewProject(
+        getUniqueProjectName(projects, parsed.projectName),
+        parsed.slides,
+        parsed.uploads,
+      )
+      await runProjectTransition(async () => {
+        await saveProject(imported)
+        return imported
+      }, 'Project imported as a new local copy', 'Couldn’t import project')
+    } catch {
+      setToast('Couldn’t import project — invalid JSON file')
+    }
+  }, [projects, runProjectTransition, setToast])
+
   const deleteCurrentProject = useCallback(async () => {
     if (projects.length <= 1 || projectTransitionRef.current) return
 
@@ -434,6 +471,8 @@ export function useProjectWorkspace({
     openProject,
     createNewProject,
     duplicateCurrentProject,
+    exportCurrentProjectJson,
+    importProjectFromFile,
     deleteCurrentProject,
   }
 }

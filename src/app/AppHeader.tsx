@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { APP_LOGO_URL, APP_NAME } from '../brand'
 import {
   AiGenerative,
@@ -13,6 +14,7 @@ import {
   Save,
   Trash2,
   Undo2,
+  Upload,
 } from '../components/icons'
 import { Button } from '../components/ui/button'
 import {
@@ -50,6 +52,8 @@ type AppHeaderProps = {
   onCreateProject: () => void
   onDuplicateProject: () => void
   onShareProject: () => void
+  onExportProjectJson: () => void
+  onImportProjectJson: (file: File) => void
   onSaveProject: () => void
   onRequestProjectDeletion: () => void
   onUndo: () => void
@@ -68,6 +72,8 @@ function ProjectMenu({
   onCreateProject,
   onDuplicateProject,
   onShareProject,
+  onExportProjectJson,
+  onImportProjectJson,
   onSaveProject,
   onRequestProjectDeletion,
 }: Pick<
@@ -79,72 +85,97 @@ function ProjectMenu({
   | 'onCreateProject'
   | 'onDuplicateProject'
   | 'onShareProject'
+  | 'onExportProjectJson'
+  | 'onImportProjectJson'
   | 'onSaveProject'
   | 'onRequestProjectDeletion'
 > & { disabled: boolean }) {
+  const importInputRef = useRef<HTMLInputElement>(null)
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="project-menu-trigger" aria-label="Open project menu">
-        <ChevronDown size={13} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={18} className="project-menu-content w-80">
-        <DropdownMenuGroup className="project-menu-projects">
-          <DropdownMenuLabel className="project-menu-label">
-            <strong>Local projects</strong>
-            <span>{projects.length} {projects.length === 1 ? 'project' : 'projects'} in this browser</span>
-          </DropdownMenuLabel>
-          <div className="project-menu-list">
-            {projects.map((project) => (
-              <DropdownMenuItem
-                key={project.id}
-                className="project-menu-project"
-                data-active={project.id === currentProjectId}
-                disabled={disabled}
-                onClick={() => onOpenProject(project.id)}
-              >
-                <span className="project-menu-check">
-                  {project.id === currentProjectId && <Check size={14} />}
-                </span>
-                <span className="project-menu-project-copy">
-                  <strong>{project.projectName}</strong>
-                  <small>Saved {formatProjectTime(project.savedAt)}</small>
-                </span>
-              </DropdownMenuItem>
-            ))}
-          </div>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={onCreateProject}>
-            <Plus size={15} />
-            <span>New project</span>
+    <>
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".json,application/json"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          if (file) onImportProjectJson(file)
+          event.target.value = ''
+        }}
+      />
+      <DropdownMenu>
+        <DropdownMenuTrigger className="project-menu-trigger" aria-label="Open project menu">
+          <ChevronDown size={13} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" sideOffset={18} className="project-menu-content w-80">
+          <DropdownMenuGroup className="project-menu-projects">
+            <DropdownMenuLabel className="project-menu-label">
+              <strong>Local projects</strong>
+              <span>{projects.length} {projects.length === 1 ? 'project' : 'projects'} in this browser</span>
+            </DropdownMenuLabel>
+            <div className="project-menu-list">
+              {projects.map((project) => (
+                <DropdownMenuItem
+                  key={project.id}
+                  className="project-menu-project"
+                  data-active={project.id === currentProjectId}
+                  disabled={disabled}
+                  onClick={() => onOpenProject(project.id)}
+                >
+                  <span className="project-menu-check">
+                    {project.id === currentProjectId && <Check size={14} />}
+                  </span>
+                  <span className="project-menu-project-copy">
+                    <strong>{project.projectName}</strong>
+                    <small>Saved {formatProjectTime(project.savedAt)}</small>
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </div>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={onCreateProject}>
+              <Plus size={15} />
+              <span>New project</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={onDuplicateProject}>
+              <Copy size={15} />
+              <span>Duplicate project</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={onShareProject}>
+              <Link01 size={15} />
+              <span>Share as link</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={onExportProjectJson}>
+              <Download size={15} />
+              <span>Export JSON</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={() => importInputRef.current?.click()}>
+              <Upload size={15} />
+              <span>Import JSON</span>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={onSaveProject}>
+            <Save size={15} />
+            <span>Save now</span>
+            <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
           </DropdownMenuItem>
-          <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={onDuplicateProject}>
-            <Copy size={15} />
-            <span>Duplicate project</span>
+          <DropdownMenuItem
+            className="project-menu-action"
+            variant="destructive"
+            disabled={disabled || projects.length <= 1 || aiRunActive}
+            onClick={onRequestProjectDeletion}
+          >
+            <Trash2 size={15} />
+            <span>{aiRunActive ? 'Delete waits for the AI run' : 'Delete current project'}</span>
           </DropdownMenuItem>
-          <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={onShareProject}>
-            <Link01 size={15} />
-            <span>Share as link</span>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="project-menu-action" disabled={disabled} onClick={onSaveProject}>
-          <Save size={15} />
-          <span>Save now</span>
-          <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="project-menu-action"
-          variant="destructive"
-          disabled={disabled || projects.length <= 1 || aiRunActive}
-          onClick={onRequestProjectDeletion}
-        >
-          <Trash2 size={15} />
-          <span>{aiRunActive ? 'Delete waits for the AI run' : 'Delete current project'}</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   )
 }
 
@@ -222,6 +253,8 @@ export function AppHeader({
   onCreateProject,
   onDuplicateProject,
   onShareProject,
+  onExportProjectJson,
+  onImportProjectJson,
   onSaveProject,
   onRequestProjectDeletion,
   onUndo,
@@ -272,6 +305,8 @@ export function AppHeader({
                 onCreateProject={onCreateProject}
                 onDuplicateProject={onDuplicateProject}
                 onShareProject={onShareProject}
+                onExportProjectJson={onExportProjectJson}
+                onImportProjectJson={onImportProjectJson}
                 onSaveProject={onSaveProject}
                 onRequestProjectDeletion={onRequestProjectDeletion}
               />

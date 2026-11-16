@@ -42,7 +42,7 @@ export const SHORT_SHARE_PATH_PREFIX = '/s/'
 
 const SHARE_API_PATH = '/api/share'
 const SHARE_ID_PATTERN = /^[A-Za-z0-9_-]{6,32}$/
-const SHARE_FORMAT_VERSION = 1
+export const SHARE_FORMAT_VERSION = 1
 
 // A stalled share API request must degrade to the inline fallback (or a
 // failed import) instead of leaving the dialog on "Preparing link …" forever.
@@ -137,7 +137,7 @@ const reencodeImageBlob = async (blob: Blob): Promise<Blob> => {
  * meaningful on another device. Sources that cannot be read keep their URL and
  * degrade to a missing image instead of failing the whole share.
  */
-const inlineImageSources = async (project: SharedProjectPayload): Promise<SharedProjectPayload> => {
+export const inlineImageSources = async (project: SharedProjectPayload): Promise<SharedProjectPayload> => {
   const hydrated = await hydrateProjectAssets(project)
   const replacements = new Map<string, string>()
   for (const src of collectAssetSources(hydrated)) {
@@ -263,7 +263,7 @@ const normalizeSharedUpload = (value: unknown): UploadAsset | null => {
   return { id: value['id'], name: value['name'], src: value['src'] }
 }
 
-const normalizeSharedProject = (value: unknown): SharedProjectPayload | null => {
+export const normalizeSharedProject = (value: unknown): SharedProjectPayload | null => {
   if (!isRecord(value) || value['v'] !== SHARE_FORMAT_VERSION) return null
   if (!Array.isArray(value['slides'])) return null
 
