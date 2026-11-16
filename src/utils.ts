@@ -129,8 +129,8 @@ export function sanitizeRichText(input: string): string {
   const output = document.createElement('div')
   appendRichTextChildren(parsed.body, output)
 
-  while (output.lastElementChild?.tagName === 'BR') {
-    output.lastElementChild.remove()
+  while (output.lastChild instanceof Element && output.lastChild.tagName === 'BR') {
+    output.lastChild.remove()
   }
 
   return output.innerHTML

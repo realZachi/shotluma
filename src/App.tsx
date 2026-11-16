@@ -163,9 +163,16 @@ export default function App() {
     commit((current) => current.map((slide) => slide.id === slideId
       ? {
           ...slide,
-          elements: slide.elements.map((element) => element.id === elementId
-            ? { ...element, ...patch }
-            : element),
+          elements: slide.elements.map((element) => {
+            if (element.id !== elementId || element.type !== 'text') return element
+            const next = { ...element, text: patch.text }
+            if (patch.html) {
+              next.html = patch.html
+            } else {
+              delete next.html
+            }
+            return next
+          }),
         }
       : slide))
   }, [commit])
